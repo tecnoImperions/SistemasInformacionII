@@ -1,33 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import {
-  Users,
   Calendar,
   Stethoscope,
   Brain,
   Baby,
   Activity,
-  Star,
   Search,
-  Trash2,
   Clock,
-  CheckCircle2,
-  XCircle,
-  Video,
-  Menu,
   X,
-  Lock,
-  Mail,
-  User,
-  Phone,
-  Shield,
   Building2,
-  FileText,
-  Hospital as HospitalIcon,
   MapPin,
   QrCode,
   Bell,
-  RefreshCw,
   Printer,
   Volume2,
   AlertTriangle,
@@ -99,14 +84,6 @@ interface Turno {
   fecha_solicitud: string;
 }
 
-interface Atencion {
-  id_atencion: string;
-  id_turno: string;
-  fecha_atencion: string;
-  diagnostico: string;
-  observaciones: string;
-  resultado: string;
-}
 
 interface NotificacionPush {
   id: string;
@@ -259,7 +236,7 @@ function App() {
 
   // --- DATOS PRINCIPALES ---
   const [centros, setCentros] = useState<CentroSalud[]>(centrosSantaCruz);
-  const [especialidades, setEspecialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
+  const [especialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
   const [horarios, setHorarios] = useState<Horario[]>(mockHorarios);
   const [turnos, setTurnos] = useState<Turno[]>([
     {
@@ -302,6 +279,12 @@ function App() {
   const [nuevoHorarioFecha, setNuevoHorarioFecha] = useState<string>('2026-08-22');
   const [nuevoHorarioInicio, setNuevoHorarioInicio] = useState<string>('06:00');
   const [nuevoHorarioFin, setNuevoHorarioFin] = useState<string>('06:30');
+
+  // --- ADMINISTRADOR (ADMIN) - HOSPITALES ---
+  const [nuevoCentroNombre, setNuevoCentroNombre] = useState('');
+  const [nuevoCentroDir, setNuevoCentroDir] = useState('');
+  const [nuevoCentroNivel, setNuevoCentroNivel] = useState<number>(2);
+  const [nuevoCentroTelf, setNuevoCentroTelf] = useState('');
 
   // Sincronización hash url
   useEffect(() => {
@@ -554,6 +537,29 @@ function App() {
 
     setHorarios([...horarios, nuevoH]);
     alert('Horario de atención registrado con éxito.');
+  };
+
+  const handleCrearCentro = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoCentroNombre.trim()) return;
+
+    const nuevo: CentroSalud = {
+      id_centro: 'c-' + Date.now(),
+      nombre: nuevoCentroNombre,
+      direccion: nuevoCentroDir,
+      nivel_atencion: nuevoCentroNivel,
+      telefono: nuevoCentroTelf,
+      como_llegar: 'Línea de micros sugerida',
+      horario_fichas: '06:00 AM - 12:00 PM',
+      distrito: 'Distrito de Santa Cruz',
+      imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+    };
+
+    setCentros([...centros, nuevo]);
+    setNuevoCentroNombre('');
+    setNuevoCentroDir('');
+    setNuevoCentroTelf('');
+    alert('Hospital registrado exitosamente.');
   };
 
   const handleSimularEscaneo = (ciInput: string) => {
