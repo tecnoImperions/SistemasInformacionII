@@ -253,6 +253,12 @@ function App() {
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
 
+  // --- FILTROS Y PAGINACIÓN DE VOLÚMENES MASIVOS ---
+  const [patientFilterTab, setPatientFilterTab] = useState<'activas' | 'historial'>('activas');
+  const [encargadoFilterTab, setEncargadoFilterTab] = useState<'pendientes' | 'procesados' | 'cancelados'>('pendientes');
+  const [encargadoPage, setEncargadoPage] = useState<number>(1);
+  const itemsPerPage = 5;
+
   // --- ENRUTADOR POR HASH ---
   const [currentRole, setCurrentRole] = useState<'paciente' | 'encargado' | 'admin'>('paciente');
 
@@ -1464,20 +1470,50 @@ function App() {
                       </div>
                       <button
                         onClick={() => setShowCruzeroMap(false)}
-                        className="w-full bg-blue-600 text-white py-2 rounded-xl font-bold text-xs transition"
+                        className="w-full bg-blue-600 text-white py-2 rounded-xl font-bold text-xs trans                {/* MIS TURNOS Y IMPRESIÓN */}
+                <section className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                    <h4 className="font-extrabold text-slate-800 text-base md:text-lg">Mis Fichas de Atención</h4>
+                    
+                    {/* TABS DE FILTRO DE PACIENTE */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl font-bold text-[10px] sm:text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPatientFilterTab('activas')}
+                        className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${patientFilterTab === 'activas' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                       >
-                        Entendido
+                        Activas ({turnos.filter(t => t.id_paciente === currentUser?.id_usuario && (t.estado === 'Pendiente' || t.estado === 'En Atención')).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPatientFilterTab('historial')}
+                        className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${patientFilterTab === 'historial' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                      >
+                        Historial ({turnos.filter(t => t.id_paciente === currentUser?.id_usuario && (t.estado === 'Atendido' || t.estado === 'Cancelado' || t.estado === 'Ausente')).length})
                       </button>
                     </div>
                   </div>
-                )}
 
-                {/* MIS TURNOS Y IMPRESIÓN */}
-                <section className="space-y-4">
-                  <h4 className="font-extrabold text-slate-800 text-base md:text-lg">Mis Fichas de Atención</h4>
                   <div className="space-y-3">
-                    {turnos.filter(t => t.id_paciente === currentUser?.id_usuario).map(turno => {
-                      return (
+                    {(() => {
+                      const filteredPatientTurnos = turnos.filter(t => {
+                        if (t.id_paciente !== currentUser?.id_usuario) return false;
+                        if (patientFilterTab === 'activas') {
+                          return t.estado === 'Pendiente' || t.estado === 'En Atención';
+                        } else {
+                          return t.estado === 'Atendido' || t.estado === 'Cancelado' || t.estado === 'Ausente';
+                        }
+                      });
+
+                      if (filteredPatientTurnos.length === 0) {
+                        return (
+                          <div className="text-center py-10 bg-white border-2 border-slate-100 rounded-3xl p-5 shadow-xs">
+                            <p className="text-xs text-slate-400 font-bold italic">No se encontraron fichas médicas en esta categoría.</p>
+                          </div>
+                        );
+                      }
+
+                      return filteredPatientTurnos.map(turno => (
                         <div key={turno.id_turno} className="bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-semibold">
                           <div className="space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1497,12 +1533,14 @@ function App() {
                             {turno.estado === 'Pendiente' && (
                               <>
                                 <button
+                                  type="button"
                                   onClick={() => imprimirFicha(turno)}
                                   className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
                                 >
-                                  <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha / PDF
+                                  <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => handleCancelarTurno(turno)}
                                   className="w-full sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
                                 >
@@ -1510,10 +1548,19 @@ function App() {
                                 </button>
                               </>
                             )}
+                            {turno.estado === 'Atendido' && (
+                              <button
+                                type="button"
+                                onClick={() => imprimirFicha(turno)}
+                                className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
+                              >
+                                <Printer className="w-4 h-4 text-slate-600" /> Reimprimir Comprobante
+                              </button>
+                            )}
                           </div>
                         </div>
-                      );
-                    })}
+                      ));
+                    })()}
                   </div>
                 </section>
               </div>
@@ -1627,17 +1674,34 @@ function App() {
                             setMostrarEscaneoSimulado(false);
                           }}
                           className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl cursor-pointer"
-                        >
-                          Confirmar Escaneo
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Listado y Búsqueda */}
+                                        {/* Listado y Búsqueda */}
                 <div className="space-y-4">
                   
+                  {/* TABS DE FILTRO DE ENCARGADO */}
+                  <div className="flex bg-indigo-50/70 p-1 rounded-2xl font-bold text-xs border border-indigo-100/50">
+                    <button
+                      type="button"
+                      onClick={() => { setEncargadoFilterTab('pendientes'); setEncargadoPage(1); }}
+                      className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'pendientes' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
+                    >
+                      Pendientes ({turnos.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEncargadoFilterTab('procesados'); setEncargadoPage(1); }}
+                      className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'procesados' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
+                    >
+                      Procesados ({turnos.filter(t => t.estado === 'Atendido').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEncargadoFilterTab('cancelados'); setEncargadoPage(1); }}
+                      className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'cancelados' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
+                    >
+                      Cancelados ({turnos.filter(t => t.estado === 'Cancelado').length})
+                    </button>
+                  </div>
+
                   {/* Buscador Rápido para la encargada */}
                   <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
                     <Search className="w-5 h-5 text-slate-400 shrink-0" />
@@ -1657,51 +1721,112 @@ function App() {
 
                   {/* Resultados de Fichas */}
                   <div className="bg-white rounded-3xl border-2 border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-sm">
-                    {turnosFiltradosEncargada.map(turno => (
-                      <div key={turno.id_turno} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs font-semibold">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-black text-slate-800 text-sm leading-none">{turno.nombre_paciente}</h4>
-                            <span className="text-[10px] text-slate-400 font-bold">C.I.: {turno.ci_paciente}</span>
-                            <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                              {turno.estado}
-                            </span>
+                    {(() => {
+                      // 1. Filtrar por búsqueda rápida
+                      let list = turnos;
+                      if (filtroBusquedaCargada.trim()) {
+                        const q = filtroBusquedaCargada.toLowerCase();
+                        list = list.filter(t => 
+                          t.ci_paciente.toLowerCase().includes(q) || 
+                          t.id_turno.toLowerCase().includes(q) ||
+                          t.nombre_paciente.toLowerCase().includes(q)
+                        );
+                      }
+
+                      // 2. Filtrar por Pestaña
+                      if (encargadoFilterTab === 'pendientes') {
+                        list = list.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención');
+                      } else if (encargadoFilterTab === 'procesados') {
+                        list = list.filter(t => t.estado === 'Atendido');
+                      } else {
+                        list = list.filter(t => t.estado === 'Cancelado' || t.estado === 'Ausente');
+                      }
+
+                      // 3. Paginar
+                      const totalItems = list.length;
+                      const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+                      
+                      // Autoajustar la página si excede el rango
+                      const currentPage = encargadoPage > totalPages ? totalPages : encargadoPage;
+                      const paginatedList = list.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                      if (paginatedList.length === 0) {
+                        return (
+                          <div className="p-12 text-center text-slate-400 text-xs italic font-semibold">
+                            No se encontraron fichas en esta pestaña con el filtro de búsqueda indicado.
                           </div>
+                        );
+                      }
+
+                      return (
+                        <>
+                          {paginatedList.map(turno => (
+                            <div key={turno.id_turno} className="p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs font-semibold animate-fadeIn">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-black text-slate-800 text-sm leading-none">{turno.nombre_paciente}</h4>
+                                  <span className="text-[10px] text-slate-400 font-bold">C.I.: {turno.ci_paciente}</span>
+                                  <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                                    {turno.estado}
+                                  </span>
+                                </div>
+                                
+                                <p className="text-[10px] text-slate-500 font-bold">
+                                  Hospital: <strong>{turno.nombre_centro}</strong> | Hora: <strong>{turno.hora}</strong>
+                                </p>
+                              </div>
+
+                              {/* Botón de Tachar de Inmediato como Atendido */}
+                              <div className="flex gap-2 shrink-0 w-full md:w-auto font-bold">
+                                {turno.estado === 'Pendiente' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => llamarPacienteVoz(turno.nombre_paciente)}
+                                      className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 p-2.5 rounded-xl cursor-pointer"
+                                      title="Llamar paciente por altavoz"
+                                    >
+                                      <Volume2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedTurnoAtencion(turno)}
+                                      className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                    >
+                                      <Check className="w-4 h-4" /> Registrar Atención (Tachar)
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                           
-                          <p className="text-[10px] text-slate-500 font-bold">
-                            Hospital: <strong>{turno.nombre_centro}</strong> | Hora: <strong>{turno.hora}</strong>
-                          </p>
-                        </div>
-
-                        {/* Botón de Tachar de Inmediato como Atendido */}
-                        <div className="flex gap-2 shrink-0 w-full md:w-auto font-bold">
-                          {turno.estado === 'Pendiente' && (
-                            <>
+                          {/* CONTROLES DE PAGINACIÓN */}
+                          <div className="bg-slate-50 p-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-200 text-xs font-bold text-slate-600">
+                            <span>Mostrando página {currentPage} de {totalPages} ({totalItems} fichas totales)</span>
+                            <div className="flex gap-2">
                               <button
-                                onClick={() => llamarPacienteVoz(turno.nombre_paciente)}
-                                className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 p-2.5 rounded-xl cursor-pointer"
-                                title="Llamar paciente por altavoz"
+                                type="button"
+                                disabled={currentPage === 1}
+                                onClick={() => setEncargadoPage(currentPage - 1)}
+                                className={`px-3.5 py-1.5 rounded-lg border text-[11px] font-black cursor-pointer transition ${currentPage === 1 ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
                               >
-                                <Volume2 className="w-4 h-4" />
+                                &larr; Ant
                               </button>
                               <button
-                                onClick={() => setSelectedTurnoAtencion(turno)}
-                                className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                type="button"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setEncargadoPage(currentPage + 1)}
+                                className={`px-3.5 py-1.5 rounded-lg border text-[11px] font-black cursor-pointer transition ${currentPage === totalPages ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
                               >
-                                <Check className="w-4 h-4" /> Registrar Atención (Tachar)
+                                Sig &rarr;
                               </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {turnosFiltradosEncargada.length === 0 && (
-                      <div className="p-8 text-center text-slate-400 text-xs italic font-semibold">
-                        No se encontraron fichas activas con el filtro indicado.
-                      </div>
-                    )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
                 </div>
