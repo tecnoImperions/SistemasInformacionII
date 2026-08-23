@@ -196,14 +196,6 @@ const especialidadesSantaCruz: Especialidad[] = [
   { id_especialidad: 'e-4', nombre: 'Cardiología', descripcion: 'Control preventivo cardiovascular', iconName: 'Activity' }
 ];
 
-const mockHorarios: Horario[] = [
-  { id_horario: 'h-1', id_centro: 'c-6', fecha: '2026-08-22', hora_inicio: '06:00', hora_fin: '06:30', disponible: true },
-  { id_horario: 'h-2', id_centro: 'c-6', fecha: '2026-08-22', hora_inicio: '06:30', hora_fin: '07:00', disponible: true },
-  { id_horario: 'h-3', id_centro: 'c-6', fecha: '2026-08-22', hora_inicio: '07:00', hora_fin: '07:30', disponible: true },
-  { id_horario: 'h-4', id_centro: 'c-1', fecha: '2026-08-22', hora_inicio: '06:00', hora_fin: '06:30', disponible: true },
-  { id_horario: 'h-5', id_centro: 'c-1', fecha: '2026-08-22', hora_inicio: '07:00', hora_fin: '07:30', disponible: true },
-  { id_horario: 'h-6', id_centro: 'c-8', fecha: '2026-08-22', hora_inicio: '06:30', hora_fin: '07:00', disponible: true }
-];
 
 function App() {
   // --- ACCESIBILIDAD MÁXIMA POR DEFECTO (VISTA ENORME / PANTALLA GRANDE) ---
@@ -222,6 +214,18 @@ function App() {
     { id: '1', titulo: 'Sistema Activo', mensaje: 'TurnoYa está listo para regular las colas en los hospitales.', tipo: 'push', fecha: 'Hoy' }
   ]);
   const [showNotifPanel, setShowNotifPanel] = useState<boolean>(false);
+
+  // --- ALERTAS Y CONFIRMACIONES ESTILO SWAL ---
+  const [swalAlert, setSwalAlert] = useState<{ show: boolean; titulo: string; mensaje: string; tipo: 'success' | 'error' | 'info' } | null>(null);
+  const [swalConfirm, setSwalConfirm] = useState<{ show: boolean; titulo: string; mensaje: string; onConfirm: () => void } | null>(null);
+
+  const triggerAlert = (titulo: string, mensaje: string, tipo: 'success' | 'error' | 'info' = 'info') => {
+    setSwalAlert({ show: true, titulo, mensaje, tipo });
+  };
+
+  const triggerConfirm = (titulo: string, mensaje: string, onConfirm: () => void) => {
+    setSwalConfirm({ show: true, titulo, mensaje, onConfirm });
+  };
 
   // --- SEGURIDAD Y SESIÓN ---
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -421,7 +425,7 @@ function App() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session && session.user) {
         const { data: userRecord } = await supabase
           .from('usuarios')
@@ -512,9 +516,9 @@ function App() {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
     if (error) {
-      alert(`Error al iniciar sesión: ${error.message}`);
+      triggerAlert('Error de Inicio', `Error al iniciar sesión: ${error.message}`, 'error');
     } else {
-      alert('¡Bienvenido a TurnoYa!');
+      triggerAlert('¡Bienvenido!', 'Sesión iniciada con éxito en TurnoYa.', 'success');
     }
   };
 
@@ -527,9 +531,9 @@ function App() {
       options: { data: { ci: finalCI, nombre: regNombre, rol: 'paciente' } }
     });
     if (error) {
-      alert(`Error al registrarse: ${error.message}`);
+      triggerAlert('Error de Registro', `Error al registrarse: ${error.message}`, 'error');
     } else {
-      alert('¡Cuenta de paciente creada en la base de datos de Supabase!');
+      triggerAlert('Registro Exitoso', '¡Cuenta de paciente creada exitosamente en Supabase!', 'success');
       setRegCI('');
       setRegComplemento('');
     }
@@ -550,7 +554,7 @@ function App() {
       msg.lang = 'es-ES';
       window.speechSynthesis.speak(msg);
     } else {
-      alert(`Llamando al paciente: ${nombre}`);
+      triggerAlert('Llamando Paciente', `Llamando al paciente: ${nombre}`, 'info');
     }
   };
 
@@ -615,7 +619,7 @@ function App() {
     }]).select();
 
     if (insertError) {
-      alert(`Error al registrar ficha en base de datos: ${insertError.message}`);
+      triggerAlert('Error al Reservar', `Error: ${insertError.message}`, 'error');
       return;
     }
 
@@ -658,23 +662,9 @@ function App() {
     setSelectedHorarioObj(null);
     setMotivoConsulta('');
 
-    alert('Ficha reservada con éxito en la base de datos. Correo SMTP de confirmación enviado.');
+    triggerAlert('Ficha Reservada', 'Ficha reservada con éxito en la base de datos. Correo SMTP de confirmación enviado.', 'success');
   };
 
-  // --- TACHADO POR LA ENCARGADA (UPDATE REAL EN SUPABASE) ---
-  const handleMarcarProcesado = async (idTurno: string) => {
-    const { error } = await supabase
-      .from('turnos')
-      .update({ estado: 'Atendido' })
-      .eq('id_turno', idTurno);
-
-    if (error) {
-      alert(`Error al procesar turno en la base de datos: ${error.message}`);
-    } else {
-      alert('Ficha marcada como PROCESADA de inmediato en la base de datos de Supabase.');
-      fetchTurnosReales();
-    }
-  };
 
   // --- REGISTRAR HORARIO DE CITA (INSERT REAL EN SUPABASE) ---
   const handleCrearHorario = async (e: React.FormEvent) => {
@@ -690,9 +680,9 @@ function App() {
     }]);
 
     if (error) {
-      alert(`Error al registrar horario: ${error.message}`);
+      triggerAlert('Error', `Error al registrar horario: ${error.message}`, 'error');
     } else {
-      alert('Horario de atención registrado con éxito en la base de datos de Supabase.');
+      triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito en la base de datos de Supabase.', 'success');
       // Recargar horarios
       const { data: dbHorarios } = await supabase.from('horarios').select('*');
       if (dbHorarios) {
@@ -710,41 +700,45 @@ function App() {
 
   // --- CANCELAR TURNO (UPDATE REAL EN SUPABASE) ---
   const handleCancelarTurno = async (turno: Turno) => {
-    if (!confirm('¿Está seguro de que desea cancelar esta ficha médica?')) return;
+    triggerConfirm(
+      '¿Cancelar Ficha Médica?',
+      'Esta acción liberará el bloque horario en la base de datos para que otro paciente pueda reservarlo.',
+      async () => {
+        const { error } = await supabase
+          .from('turnos')
+          .update({ estado: 'Cancelado' })
+          .eq('id_turno', turno.id_turno);
 
-    const { error } = await supabase
-      .from('turnos')
-      .update({ estado: 'Cancelado' })
-      .eq('id_turno', turno.id_turno);
+        if (error) {
+          triggerAlert('Error', `Error al cancelar turno: ${error.message}`, 'error');
+          return;
+        }
 
-    if (error) {
-      alert(`Error al cancelar turno: ${error.message}`);
-      return;
-    }
+        // Liberar horario
+        if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
+          await supabase
+            .from('horarios')
+            .update({ disponible: true })
+            .eq('id_horario', turno.id_horario);
+        }
 
-    // Liberar horario
-    if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
-      await supabase
-        .from('horarios')
-        .update({ disponible: true })
-        .eq('id_horario', turno.id_horario);
-    }
-
-    alert('Ficha médica cancelada con éxito. El horario ha sido liberado.');
-    fetchTurnosReales();
-    
-    // Recargar horarios
-    const { data: dbHorarios } = await supabase.from('horarios').select('*');
-    if (dbHorarios) {
-      setHorarios(dbHorarios.map(h => ({
-        id_horario: h.id_horario,
-        id_centro: h.id_centro,
-        fecha: h.fecha,
-        hora_inicio: h.hora_inicio.substring(0, 5),
-        hora_fin: h.hora_fin.substring(0, 5),
-        disponible: h.disponible
-      })));
-    }
+        triggerAlert('Ficha Cancelada', 'La ficha médica ha sido cancelada con éxito.', 'success');
+        fetchTurnosReales();
+        
+        // Recargar horarios
+        const { data: dbHorarios } = await supabase.from('horarios').select('*');
+        if (dbHorarios) {
+          setHorarios(dbHorarios.map(h => ({
+            id_horario: h.id_horario,
+            id_centro: h.id_centro,
+            fecha: h.fecha,
+            hora_inicio: h.hora_inicio.substring(0, 5),
+            hora_fin: h.hora_fin.substring(0, 5),
+            disponible: h.disponible
+          })));
+        }
+      }
+    );
   };
 
   // --- REGISTRAR ATENCIÓN CLÍNICA Y FINALIZAR (INSERT REAL EN SUPABASE) ---
@@ -761,7 +755,7 @@ function App() {
     }]);
 
     if (errorAtencion) {
-      alert(`Error al registrar atención en la base de datos: ${errorAtencion.message}`);
+      triggerAlert('Error', `Error al registrar atención: ${errorAtencion.message}`, 'error');
       return;
     }
 
@@ -772,11 +766,11 @@ function App() {
       .eq('id_turno', selectedTurnoAtencion.id_turno);
 
     if (errorTurno) {
-      alert(`Error al actualizar estado de la ficha: ${errorTurno.message}`);
+      triggerAlert('Error', `Error al actualizar estado: ${errorTurno.message}`, 'error');
       return;
     }
 
-    alert('¡Consulta y atención clínica registrada con éxito en Supabase!');
+    triggerAlert('Atención Registrada', '¡Consulta y atención clínica registrada con éxito en Supabase!', 'success');
     
     // Limpiar estados
     setSelectedTurnoAtencion(null);
@@ -800,9 +794,9 @@ function App() {
     }]);
 
     if (error) {
-      alert(`Error al registrar hospital: ${error.message}`);
+      triggerAlert('Error', `Error al registrar hospital: ${error.message}`, 'error');
     } else {
-      alert('Hospital registrado exitosamente en la base de datos de Supabase.');
+      triggerAlert('Hospital Registrado', 'Hospital registrado exitosamente en la base de datos de Supabase.', 'success');
       setNuevoCentroNombre('');
       setNuevoCentroDir('');
       setNuevoCentroTelf('');
@@ -866,81 +860,84 @@ function App() {
     <div className={`min-h-screen bg-slate-50 flex flex-col font-sans ${isSuperSize ? 'text-2xl' : 'text-base'}`}>
       
       {/* HEADER DE LA APLICACIÓN */}
-      <header className="bg-white border-b-2 border-slate-200 py-6 px-6 sticky top-0 z-40 shadow-md">
-        <div className="max-w-7xl mx-auto flex justify-between items-center flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-white border border-slate-200 p-1 rounded-2xl shadow-xs shrink-0">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 space-y-2.5">
+          <div className="flex justify-between items-center">
+            {/* BRAND / LOGO */}
+            <div className="flex items-center gap-2.5">
               <img
                 src="logo.jpg"
-                alt="Logo TurnoYa"
-                className="h-14 w-14 object-contain rounded-xl"
+                alt="Logo"
+                className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-xl border border-slate-200 p-0.5"
                 onError={(e) => {
-                  // Si no existe el archivo logo.jpg en public, ocultar imagen para evitar icono roto
                   e.currentTarget.style.display = 'none';
                 }}
               />
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none animate-fadeIn">TurnoYa</h1>
+                <p className="text-[9px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Santa Cruz - Bolivia</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-none">TurnoYa</h1>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Santa Cruz - Bolivia</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-4 flex-wrap">
-            {/* BOTÓN TEXTO ENORME */}
-            <button
-              onClick={() => setIsSuperSize(!isSuperSize)}
-              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition cursor-pointer shadow-xs ${isSuperSize ? 'bg-blue-600 text-white border-2 border-blue-700' : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'}`}
-            >
-              🔎 {isSuperSize ? 'Vista Normal' : 'Vista de Topo (Texto Enorme)'}
-            </button>
+            {/* ACCIONES DEL HEADER */}
+            <div className="flex items-center gap-2 font-bold text-xs">
+              {/* BOTÓN TEXTO ENORME */}
+              <button
+                type="button"
+                onClick={() => setIsSuperSize(!isSuperSize)}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1 ${isSuperSize ? 'bg-blue-600 text-white border border-blue-700' : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
+              >
+                🔎 {isSuperSize ? 'Vista Normal' : 'Texto Grande'}
+              </button>
 
-            {/* NOTIFICACIONES */}
-            {isLoggedIn && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowNotifPanel(!showNotifPanel)}
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl relative border cursor-pointer"
-                >
-                  <Bell className="w-6 h-6 text-slate-600" />
-                  {notificaciones.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                      {notificaciones.length}
-                    </span>
-                  )}
-                </button>
+              {/* NOTIFICACIONES */}
+              {isLoggedIn && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowNotifPanel(!showNotifPanel)}
+                    className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl relative border cursor-pointer flex items-center justify-center"
+                  >
+                    <Bell className="w-5 h-5 text-slate-600" />
+                    {notificaciones.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">
+                        {notificaciones.length}
+                      </span>
+                    )}
+                  </button>
 
-                {showNotifPanel && (
-                  <div className="absolute right-0 mt-3 w-[calc(100vw-2.5rem)] sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 text-xs font-semibold space-y-3">
-                    <h4 className="font-black text-slate-800 border-b pb-2">Notificaciones de Correo (SMTP)</h4>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {notificaciones.map(n => (
-                        <div key={n.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                          <p className="text-blue-700 font-black">{n.titulo}</p>
-                          <p className="text-slate-600 text-[10px] leading-snug">{n.mensaje}</p>
-                        </div>
-                      ))}
+                  {showNotifPanel && (
+                    <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 text-xs font-semibold space-y-3">
+                      <h4 className="font-black text-slate-800 border-b pb-2">Notificaciones de Correo (SMTP)</h4>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {notificaciones.map(n => (
+                          <div key={n.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                            <p className="text-blue-700 font-black">{n.titulo}</p>
+                            <p className="text-slate-600 text-[10px] leading-snug">{n.mensaje}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isLoggedIn && currentUser ? (
-              <div className="flex items-center gap-3 text-xs font-bold bg-slate-100 px-3.5 py-1.5 rounded-2xl">
-                <span className="text-slate-800">{currentUser.nombre}</span>
-                <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">{currentUser.rol}</span>
-                <button
-                  onClick={handleLogout}
-                  className="text-rose-600 hover:underline font-extrabold ml-1 text-xs cursor-pointer"
-                >
-                  Salir
-                </button>
-              </div>
-            ) : (
-              <span className="text-xs text-slate-400 italic">Sesión Cerrada</span>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* BARRA DE PERFIL DE SESIÓN */}
+          {isLoggedIn && currentUser && (
+            <div className="bg-blue-50/70 border border-blue-100/80 rounded-2xl px-3.5 py-2 flex items-center justify-between text-xs font-bold text-blue-900 animate-fadeIn">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] bg-blue-600 text-white font-black px-2 py-0.5 rounded-full uppercase tracking-wider">{currentUser.rol}</span>
+                <span className="text-blue-800 text-[11px] truncate max-w-[150px] sm:max-w-xs">{currentUser.nombre}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-rose-600 hover:text-rose-700 hover:underline font-extrabold text-[11px] cursor-pointer bg-transparent border-0 outline-none"
+              >
+                Salir &rarr;
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1042,6 +1039,15 @@ function App() {
                       Regístrate aquí
                     </button>
                   </p>
+
+                  <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-2">
+                    <p className="text-[9px] text-slate-400 font-black uppercase">Accesos Rápidos de Prueba (Demo)</p>
+                    <div className="flex gap-2 flex-wrap justify-center font-bold">
+                      <button type="button" onClick={() => handleBypass('paciente')} className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] text-slate-600 hover:bg-slate-100 cursor-pointer">Paciente Demo</button>
+                      <button type="button" onClick={() => handleBypass('encargado')} className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] text-slate-600 hover:bg-slate-100 cursor-pointer">Encargado Demo</button>
+                      <button type="button" onClick={() => handleBypass('admin')} className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-[10px] text-slate-600 hover:bg-slate-100 cursor-pointer">Admin Demo</button>
+                    </div>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="space-y-4 font-semibold">
@@ -1891,6 +1897,64 @@ function App() {
         </div>
       </footer>
 
+      {/* SWAL ALERT PERSONALIZADA (ESTILO SWEETALERT) */}
+      {swalAlert && swalAlert.show && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-xs">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6 space-y-4 border text-center flex flex-col items-center">
+            {swalAlert.tipo === 'success' ? (
+              <div className="bg-emerald-50 text-emerald-600 p-3 rounded-full border border-emerald-100 mb-2">
+                <Check className="w-8 h-8" />
+              </div>
+            ) : swalAlert.tipo === 'error' ? (
+              <div className="bg-rose-50 text-rose-600 p-3 rounded-full border border-rose-100 mb-2">
+                <XCircle className="w-8 h-8" />
+              </div>
+            ) : (
+              <div className="bg-blue-50 text-blue-600 p-3 rounded-full border border-blue-100 mb-2">
+                <Activity className="w-8 h-8" />
+              </div>
+            )}
+            <h4 className="font-black text-slate-800 text-base">{swalAlert.titulo}</h4>
+            <p className="text-slate-500 font-bold leading-relaxed">{swalAlert.mensaje}</p>
+            <button
+              onClick={() => setSwalAlert(null)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold transition text-xs cursor-pointer mt-4"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SWAL CONFIRM PERSONALIZADA (ESTILO SWEETALERT) */}
+      {swalConfirm && swalConfirm.show && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-xs">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6 space-y-4 border text-center flex flex-col items-center">
+            <div className="bg-amber-50 text-amber-600 p-3 rounded-full border border-amber-100 mb-2">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h4 className="font-black text-slate-800 text-base">{swalConfirm.titulo}</h4>
+            <p className="text-slate-500 font-bold leading-relaxed">{swalConfirm.mensaje}</p>
+            <div className="flex gap-3 w-full pt-4">
+              <button
+                onClick={() => setSwalConfirm(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+              >
+                No, cancelar
+              </button>
+              <button
+                onClick={() => {
+                  swalConfirm.onConfirm();
+                  setSwalConfirm(null);
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+              >
+                Sí, confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
