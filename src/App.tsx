@@ -1469,8 +1469,17 @@ function App() {
                         <p className="text-sm font-black text-blue-900 bg-white p-3 rounded-xl border border-blue-200">{activeRouteInfo}</p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => setShowCruzeroMap(false)}
-                        className="w-full bg-blue-600 text-white py-2 rounded-xl font-bold text-xs trans                {/* MIS TURNOS Y IMPRESIÓN */}
+                        className="w-full bg-blue-600 text-white py-2 rounded-xl font-bold text-xs transition"
+                      >
+                        Entendido
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* MIS TURNOS Y IMPRESIÓN */}
                 <section className="space-y-4">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <h4 className="font-extrabold text-slate-800 text-base md:text-lg">Mis Fichas de Atención</h4>
@@ -1658,7 +1667,6 @@ function App() {
                           />
                         </div>
                       </div>
-
                       <div className="flex gap-2 font-bold text-xs">
                         <button
                           type="button"
@@ -1674,7 +1682,15 @@ function App() {
                             setMostrarEscaneoSimulado(false);
                           }}
                           className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl cursor-pointer"
-                                        {/* Listado y Búsqueda */}
+                        >
+                          Confirmar Escaneo
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Listado y Búsqueda */}
                 <div className="space-y-4">
                   
                   {/* TABS DE FILTRO DE ENCARGADO */}
