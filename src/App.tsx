@@ -666,7 +666,7 @@ function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'TurnoYa <onboarding@resend.dev>',
+          from: 'onboarding@resend.dev',
           to: [currentUser.correo],
           subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
           html: `
@@ -688,7 +688,19 @@ function App() {
             </div>
           `
         })
-      }).catch(err => console.error("Error al enviar email por Resend:", err));
+      })
+      .then(async (res) => {
+        const data = await res.json();
+        console.log("Resend API response:", data);
+        if (!res.ok) {
+          triggerAlert(
+            'Detalle de Correo',
+            `Resend rechazó el envío: ${data.message || 'Error de Autenticación/Dominio'}. Verifique que el correo del paciente sea el mismo con el que se registró en Resend.`,
+            'info'
+          );
+        }
+      })
+      .catch(err => console.error("Error al enviar email por Resend:", err));
     }
 
     // Recargar horarios y turnos de Supabase
