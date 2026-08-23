@@ -21,7 +21,11 @@ import {
   Check,
   Map,
   Eye,
-  EyeOff
+  EyeOff,
+  BarChart3,
+  Download,
+  FileText,
+  XCircle
 } from 'lucide-react'
 
 // --- DEFINICIONES DE TIPOS ---
@@ -230,6 +234,7 @@ function App() {
 
   // Formulario registro (Sin selección de roles, por defecto Paciente)
   const [regCI, setRegCI] = useState('');
+  const [regComplemento, setRegComplemento] = useState('');
   const [regNombre, setRegNombre] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -237,26 +242,8 @@ function App() {
   // --- DATOS PRINCIPALES ---
   const [centros, setCentros] = useState<CentroSalud[]>(centrosSantaCruz);
   const [especialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
-  const [horarios, setHorarios] = useState<Horario[]>(mockHorarios);
-  const [turnos, setTurnos] = useState<Turno[]>([
-    {
-      id_turno: 't-1',
-      id_paciente: 'u-demo-pac',
-      nombre_paciente: 'Juan Andrés Revollo',
-      ci_paciente: '7766554',
-      telefono_paciente: '76543210',
-      id_personal_salud: 'u-demo-enc',
-      nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
-      especialidad_personal_salud: 'Medicina General',
-      id_centro: 'c-6',
-      nombre_centro: 'Hospital San Juan de Dios',
-      id_horario: 'h-1',
-      fecha: '2026-08-22',
-      hora: '06:00 AM',
-      estado: 'Pendiente',
-      fecha_solicitud: '2026-08-21 07:15 AM'
-    }
-  ]);
+  const [horarios, setHorarios] = useState<Horario[]>([]);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
 
   // --- ENRUTADOR POR HASH ---
   const [currentRole, setCurrentRole] = useState<'paciente' | 'encargado' | 'admin'>('paciente');
@@ -286,6 +273,12 @@ function App() {
   const [nuevoCentroNivel, setNuevoCentroNivel] = useState<number>(2);
   const [nuevoCentroTelf, setNuevoCentroTelf] = useState('');
 
+  // --- REGISTRAR ATENCIÓN MÉDICA (ENCARGADO/PERSONAL DE SALUD) ---
+  const [selectedTurnoAtencion, setSelectedTurnoAtencion] = useState<Turno | null>(null);
+  const [atencionDiagnostico, setAtencionDiagnostico] = useState<string>('');
+  const [atencionObservaciones, setAtencionObservaciones] = useState<string>('');
+  const [atencionResultado, setAtencionResultado] = useState<string>('');
+
   // Sincronización hash url
   useEffect(() => {
     const syncHash = () => {
@@ -302,22 +295,174 @@ function App() {
     return () => window.removeEventListener('hashchange', syncHash);
   }, []);
 
-  // Cargar sesión persistente de localStorage y base de datos
-  useEffect(() => {
-    // 1. Revisar si hay sesión guardada en localStorage
-    const savedUser = localStorage.getItem('user_session');
-    const isRemembered = localStorage.getItem('remember_me') === 'true';
+  // Cargar turnos reales (Fichas) de la base de datos de Supabase
+  const fetchTurnosReales = async () => {
+    if (!currentUser) return;
 
-    if (savedUser && isRemembered) {
-      try {
-        const user = JSON.parse(savedUser);
-        setCurrentUser(user);
-        setIsLoggedIn(true);
-        window.location.hash = `#${user.rol}`;
-      } catch (err) {
-        localStorage.removeItem('user_session');
+    if (currentUser.rol === 'paciente') {
+      const { data: dbTurnos } = await supabase
+        .from('turnos')
+        .select('*')
+        .eq('id_paciente', currentUser.id_usuario)
+        .order('fecha_solicitud', { ascending: false });
+
+      if (dbTurnos) {
+        const mapped = dbTurnos.map(t => {
+          const centro = centros.find(c => c.id_centro === t.id_centro);
+          return {
+            id_turno: t.id_turno,
+            id_paciente: t.id_paciente,
+            nombre_paciente: `${currentUser.nombre} ${currentUser.apellido || ''}`,
+            ci_paciente: currentUser.ci,
+            telefono_paciente: currentUser.telefono,
+            id_personal_salud: t.id_personal_salud || '',
+            nombre_personal_salud: 'Médico de Turno',
+            especialidad_personal_salud: 'Medicina General',
+            id_centro: t.id_centro,
+            nombre_centro: centro?.nombre || 'Hospital General',
+            id_horario: t.id_horario || '',
+            fecha: t.fecha,
+            hora: `${t.hora.substring(0, 5)} AM`,
+            estado: t.estado as any,
+            fecha_solicitud: t.fecha_solicitud
+          };
+        });
+        setTurnos(mapped);
+      }
+    } else {
+      const { data: dbTurnos } = await supabase
+        .from('turnos')
+        .select('*')
+        .order('fecha_solicitud', { ascending: false });
+
+      if (dbTurnos) {
+        const { data: dbUsers } = await supabase.from('usuarios').select('*');
+        const mapped = dbTurnos.map(t => {
+          const centro = centros.find(c => c.id_centro === t.id_centro);
+          const pac = dbUsers?.find(u => u.id_usuario === t.id_paciente);
+          return {
+            id_turno: t.id_turno,
+            id_paciente: t.id_paciente,
+            nombre_paciente: pac ? `${pac.nombre} ${pac.apellido || ''}` : 'Paciente de Prueba',
+            ci_paciente: pac?.ci || 'Sin C.I.',
+            telefono_paciente: pac?.telefono || '',
+            id_personal_salud: t.id_personal_salud || '',
+            nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
+            especialidad_personal_salud: 'Medicina General',
+            id_centro: t.id_centro,
+            nombre_centro: centro?.nombre || 'Hospital General',
+            id_horario: t.id_horario || '',
+            fecha: t.fecha,
+            hora: `${t.hora.substring(0, 5)} AM`,
+            estado: t.estado as any,
+            fecha_solicitud: t.fecha_solicitud
+          };
+        });
+        setTurnos(mapped);
       }
     }
+  };
+
+  useEffect(() => {
+    fetchTurnosReales();
+  }, [currentUser, centros]);
+
+  // Cargar sesión y escuchar cambios en Supabase Auth
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && session.user) {
+        // Consultar los datos reales del usuario en la tabla 'usuarios'
+        const { data: userRecord } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('id_usuario', session.user.id)
+          .single();
+
+        if (userRecord) {
+          const loadedUser: Usuario = {
+            id_usuario: userRecord.id_usuario,
+            ci: userRecord.ci || '',
+            nombre: userRecord.nombre || '',
+            apellido: userRecord.apellido || '',
+            correo: userRecord.correo || session.user.email || '',
+            telefono: userRecord.telefono || '',
+            rol: userRecord.rol || 'paciente',
+            matricula_profesional: userRecord.matricula_profesional,
+            id_especialidad: userRecord.id_especialidad
+          };
+          setCurrentUser(loadedUser);
+          setIsLoggedIn(true);
+          window.location.hash = `#${loadedUser.rol}`;
+          localStorage.setItem('user_session', JSON.stringify(loadedUser));
+        } else {
+          // Si no está registrado en la base de datos pública, cargar de la sesión
+          const tempUser: Usuario = {
+            id_usuario: session.user.id,
+            ci: session.user.user_metadata?.ci || '',
+            nombre: session.user.user_metadata?.nombre || 'Paciente Nuevo',
+            apellido: session.user.user_metadata?.apellido || '',
+            correo: session.user.email || '',
+            telefono: session.user.user_metadata?.telefono || '',
+            rol: 'paciente'
+          };
+          setCurrentUser(tempUser);
+          setIsLoggedIn(true);
+          window.location.hash = '#paciente';
+          localStorage.setItem('user_session', JSON.stringify(tempUser));
+        }
+      } else {
+        // Si no hay sesión activa en Supabase, asegurar que esté deslogueado y sin caché
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+        localStorage.removeItem('user_session');
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session && session.user) {
+        const { data: userRecord } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('id_usuario', session.user.id)
+          .single();
+
+        const resolvedUser: Usuario = userRecord ? {
+          id_usuario: userRecord.id_usuario,
+          ci: userRecord.ci || '',
+          nombre: userRecord.nombre || '',
+          apellido: userRecord.apellido || '',
+          correo: userRecord.correo || session.user.email || '',
+          telefono: userRecord.telefono || '',
+          rol: userRecord.rol || 'paciente',
+          matricula_profesional: userRecord.matricula_profesional,
+          id_especialidad: userRecord.id_especialidad
+        } : {
+          id_usuario: session.user.id,
+          ci: session.user.user_metadata?.ci || '',
+          nombre: session.user.user_metadata?.nombre || 'Paciente Nuevo',
+          apellido: session.user.user_metadata?.apellido || '',
+          correo: session.user.email || '',
+          telefono: session.user.user_metadata?.telefono || '',
+          rol: 'paciente'
+        };
+
+        setCurrentUser(resolvedUser);
+        setIsLoggedIn(true);
+        window.location.hash = `#${resolvedUser.rol}`;
+        if (rememberMe) {
+          localStorage.setItem('user_session', JSON.stringify(resolvedUser));
+          localStorage.setItem('remember_me', 'true');
+        }
+      } else {
+        // Si se cierra sesión o expira, limpiar estados de inmediato
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+        localStorage.removeItem('user_session');
+      }
+    });
 
     const fetchDB = async () => {
       const { data: dbCentros } = await supabase.from('centros_salud').select('*');
@@ -340,26 +485,24 @@ function App() {
       }
     };
     fetchDB();
-  }, []);
 
-  // --- ACCESOS RÁPIDOS DE PRUEBA (SOLO DESDE VENTANILLA DE ACCESO SEGURO) ---
+    return () => subscription.unsubscribe();
+  }, [rememberMe]);
+
+  // --- ACCESOS RÁPIDOS DE PRUEBA (DESDE DEMO BAR) ---
   const handleBypass = (role: 'paciente' | 'encargado' | 'admin') => {
     const demoUsers: Record<string, Usuario> = {
-      paciente: { id_usuario: 'u-demo-pac', ci: '7766554', nombre: 'Juan Andrés', apellido: 'Revollo', correo: 'paciente@upds.com', telefono: '76543210', rol: 'paciente' },
-      encargado: { id_usuario: 'u-demo-enc', ci: '5678901', nombre: 'Dra. Suzanne', apellido: 'Gutiérrez', correo: 'suzanne@upds.com', telefono: '78011223', rol: 'encargado', matricula_profesional: 'MP-98442' },
-      admin: { id_usuario: 'u-demo-adm', ci: '1111111', nombre: 'Docente', apellido: 'Evaluador', correo: 'admin@upds.com', telefono: '71122334', rol: 'admin' }
+      paciente: { id_usuario: 'u-demo-pac', ci: '7766554', nombre: 'Paciente de Prueba', apellido: 'Revollo', correo: 'paciente@upds.com', telefono: '76543210', rol: 'paciente' },
+      encargado: { id_usuario: 'u-demo-enc', ci: '5678901', nombre: 'Encargada de Turno', apellido: 'Gutiérrez', correo: 'suzanne@upds.com', telefono: '78011223', rol: 'encargado', matricula_profesional: 'MP-98442' },
+      admin: { id_usuario: 'u-demo-adm', ci: '1111111', nombre: 'Administrador de Turno', apellido: 'Evaluador', correo: 'admin@upds.com', telefono: '71122334', rol: 'admin' }
     };
     const selected = demoUsers[role];
     setCurrentUser(selected);
     setIsLoggedIn(true);
 
-    // Persistir si corresponde
     if (rememberMe) {
       localStorage.setItem('user_session', JSON.stringify(selected));
       localStorage.setItem('remember_me', 'true');
-    } else {
-      localStorage.removeItem('user_session');
-      localStorage.setItem('remember_me', 'false');
     }
 
     window.location.hash = `#${role}`;
@@ -369,24 +512,26 @@ function App() {
     e.preventDefault();
     const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
     if (error) {
-      alert(`Error: ${error.message}`);
+      alert(`Error al iniciar sesión: ${error.message}`);
     } else {
-      handleBypass('paciente');
+      alert('¡Bienvenido a TurnoYa!');
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    const finalCI = regComplemento ? `${regCI}-${regComplemento.toUpperCase()}` : regCI;
     const { error } = await supabase.auth.signUp({
       email: regEmail,
       password: regPassword,
-      options: { data: { ci: regCI, nombre: regNombre, rol: 'paciente' } }
+      options: { data: { ci: finalCI, nombre: regNombre, rol: 'paciente' } }
     });
     if (error) {
-      alert(`Error: ${error.message}`);
+      alert(`Error al registrarse: ${error.message}`);
     } else {
-      alert('¡Cuenta creada de forma segura como Paciente!');
-      handleBypass('paciente');
+      alert('¡Cuenta de paciente creada en la base de datos de Supabase!');
+      setRegCI('');
+      setRegComplemento('');
     }
   };
 
@@ -453,45 +598,57 @@ function App() {
     printWindow.document.close();
   };
 
-  // --- SOLICITAR TURNO ---
-  const registrarFicha = (e: React.FormEvent) => {
+  // --- SOLICITAR TURNO (INSERT REAL EN SUPABASE) ---
+  const registrarFicha = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedHorarioObj || !currentUser) return;
 
-    const centroObj = centros.find(c => c.id_centro === selectedCentroId);
-    const espObj = especialidades.find(esp => esp.id_especialidad === selectedEspecialidadId);
-
-    const idCita = 't-' + Date.now();
-    const nuevoTurno: Turno = {
-      id_turno: idCita,
+    // 1. Insertar turno en Supabase
+    const isMockHorario = selectedHorarioObj.id_horario.startsWith('h-auto');
+    const { data: insertData, error: insertError } = await supabase.from('turnos').insert([{
       id_paciente: currentUser.id_usuario,
-      nombre_paciente: `${currentUser.nombre} ${currentUser.apellido || ''}`,
-      ci_paciente: currentUser.ci,
-      telefono_paciente: currentUser.telefono,
-      id_personal_salud: 'u-demo-enc',
-      nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
-      especialidad_personal_salud: espObj?.nombre || 'Medicina General',
       id_centro: selectedCentroId,
-      nombre_centro: centroObj?.nombre || 'Hospital General',
-      id_horario: selectedHorarioObj.id_horario,
+      id_horario: isMockHorario ? null : selectedHorarioObj.id_horario,
       fecha: selectedHorarioObj.fecha,
-      hora: `${selectedHorarioObj.hora_inicio} AM`,
-      estado: 'Pendiente',
-      fecha_solicitud: new Date().toLocaleString()
-    };
+      hora: selectedHorarioObj.hora_inicio,
+      estado: 'Pendiente'
+    }]).select();
 
-    setHorarios(horarios.map(h => h.id_horario === selectedHorarioObj.id_horario ? { ...h, disponible: false } : h));
-    setTurnos([nuevoTurno, ...turnos]);
+    if (insertError) {
+      alert(`Error al registrar ficha en base de datos: ${insertError.message}`);
+      return;
+    }
 
-    // Registrar en notificaciones locales
+    // 2. Marcar horario como no disponible en la base de datos
+    // Si es un horario autogenerado por fallback (id comienza con h-auto), no intentamos actualizarlo en Supabase
+    if (!selectedHorarioObj.id_horario.startsWith('h-auto')) {
+      await supabase.from('horarios').update({ disponible: false }).eq('id_horario', selectedHorarioObj.id_horario);
+    }
+
+    // 3. Recargar notificaciones locales y turnos
+    const idCita = insertData && insertData[0] ? insertData[0].id_turno : 't-' + Date.now();
     const nuevaNotif: NotificacionPush = {
       id: 'n-' + Date.now(),
       titulo: '📧 Correo SMTP Enviado',
-      mensaje: `Ficha #${idCita.substring(2, 8).toUpperCase()} enviada con éxito a ${currentUser.correo}.`,
+      mensaje: `Confirmación de Ficha #${idCita.substring(2, 8).toUpperCase()} enviada exitosamente al Gmail: ${currentUser.correo} registrado en Supabase.`,
       tipo: 'email',
       fecha: 'Hace un momento'
     };
     setNotificaciones([nuevaNotif, ...notificaciones]);
+
+    // Recargar horarios y turnos de Supabase
+    fetchTurnosReales();
+    const { data: dbHorarios } = await supabase.from('horarios').select('*');
+    if (dbHorarios) {
+      setHorarios(dbHorarios.map(h => ({
+        id_horario: h.id_horario,
+        id_centro: h.id_centro,
+        fecha: h.fecha,
+        hora_inicio: h.hora_inicio.substring(0, 5),
+        hora_fin: h.hora_fin.substring(0, 5),
+        disponible: h.disponible
+      })));
+    }
 
     // Resetear Wizard
     setWizardStep(1);
@@ -501,65 +658,175 @@ function App() {
     setSelectedHorarioObj(null);
     setMotivoConsulta('');
 
-    alert('Ficha reservada con éxito. Correo SMTP de confirmación enviado.');
+    alert('Ficha reservada con éxito en la base de datos. Correo SMTP de confirmación enviado.');
   };
 
-  // --- TACHADO POR LA ENCARGADA ---
-  const handleMarcarProcesado = (idTurno: string) => {
-    setTurnos(turnos.map(t => t.id_turno === idTurno ? { ...t, estado: 'Atendido' } : t));
-    alert('Ficha marcada como PROCESADA de inmediato por la encargada.');
+  // --- TACHADO POR LA ENCARGADA (UPDATE REAL EN SUPABASE) ---
+  const handleMarcarProcesado = async (idTurno: string) => {
+    const { error } = await supabase
+      .from('turnos')
+      .update({ estado: 'Atendido' })
+      .eq('id_turno', idTurno);
+
+    if (error) {
+      alert(`Error al procesar turno en la base de datos: ${error.message}`);
+    } else {
+      alert('Ficha marcada como PROCESADA de inmediato en la base de datos de Supabase.');
+      fetchTurnosReales();
+    }
   };
 
-  // --- REGISTRAR HORARIO DE CITA (ADMIN) ---
-  const handleCrearHorario = (e: React.FormEvent) => {
+  // --- REGISTRAR HORARIO DE CITA (INSERT REAL EN SUPABASE) ---
+  const handleCrearHorario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoHorarioCentro) return;
 
-    const nuevoH: Horario = {
-      id_horario: 'h-' + Date.now(),
+    const { error } = await supabase.from('horarios').insert([{
       id_centro: nuevoHorarioCentro,
       fecha: nuevoHorarioFecha,
       hora_inicio: nuevoHorarioInicio,
       hora_fin: nuevoHorarioFin,
       disponible: true
-    };
+    }]);
 
-    // Registrar en Supabase si es real
-    try {
-      supabase.from('horarios').insert([{
-        id_centro: nuevoHorarioCentro,
-        fecha: nuevoHorarioFecha,
-        hora_inicio: nuevoHorarioInicio,
-        hora_fin: nuevoHorarioFin,
-        disponible: true
-      }]);
-    } catch (err) {}
-
-    setHorarios([...horarios, nuevoH]);
-    alert('Horario de atención registrado con éxito.');
+    if (error) {
+      alert(`Error al registrar horario: ${error.message}`);
+    } else {
+      alert('Horario de atención registrado con éxito en la base de datos de Supabase.');
+      // Recargar horarios
+      const { data: dbHorarios } = await supabase.from('horarios').select('*');
+      if (dbHorarios) {
+        setHorarios(dbHorarios.map(h => ({
+          id_horario: h.id_horario,
+          id_centro: h.id_centro,
+          fecha: h.fecha,
+          hora_inicio: h.hora_inicio.substring(0, 5),
+          hora_fin: h.hora_fin.substring(0, 5),
+          disponible: h.disponible
+        })));
+      }
+    }
   };
 
-  const handleCrearCentro = (e: React.FormEvent) => {
+  // --- CANCELAR TURNO (UPDATE REAL EN SUPABASE) ---
+  const handleCancelarTurno = async (turno: Turno) => {
+    if (!confirm('¿Está seguro de que desea cancelar esta ficha médica?')) return;
+
+    const { error } = await supabase
+      .from('turnos')
+      .update({ estado: 'Cancelado' })
+      .eq('id_turno', turno.id_turno);
+
+    if (error) {
+      alert(`Error al cancelar turno: ${error.message}`);
+      return;
+    }
+
+    // Liberar horario
+    if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
+      await supabase
+        .from('horarios')
+        .update({ disponible: true })
+        .eq('id_horario', turno.id_horario);
+    }
+
+    alert('Ficha médica cancelada con éxito. El horario ha sido liberado.');
+    fetchTurnosReales();
+    
+    // Recargar horarios
+    const { data: dbHorarios } = await supabase.from('horarios').select('*');
+    if (dbHorarios) {
+      setHorarios(dbHorarios.map(h => ({
+        id_horario: h.id_horario,
+        id_centro: h.id_centro,
+        fecha: h.fecha,
+        hora_inicio: h.hora_inicio.substring(0, 5),
+        hora_fin: h.hora_fin.substring(0, 5),
+        disponible: h.disponible
+      })));
+    }
+  };
+
+  // --- REGISTRAR ATENCIÓN CLÍNICA Y FINALIZAR (INSERT REAL EN SUPABASE) ---
+  const handleRegistrarAtencion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTurnoAtencion) return;
+
+    // 1. Guardar registro en atenciones
+    const { error: errorAtencion } = await supabase.from('atenciones').insert([{
+      id_turno: selectedTurnoAtencion.id_turno,
+      diagnostico: atencionDiagnostico,
+      observaciones: atencionObservaciones,
+      resultado: atencionResultado
+    }]);
+
+    if (errorAtencion) {
+      alert(`Error al registrar atención en la base de datos: ${errorAtencion.message}`);
+      return;
+    }
+
+    // 2. Marcar el turno como Atendido
+    const { error: errorTurno } = await supabase
+      .from('turnos')
+      .update({ estado: 'Atendido' })
+      .eq('id_turno', selectedTurnoAtencion.id_turno);
+
+    if (errorTurno) {
+      alert(`Error al actualizar estado de la ficha: ${errorTurno.message}`);
+      return;
+    }
+
+    alert('¡Consulta y atención clínica registrada con éxito en Supabase!');
+    
+    // Limpiar estados
+    setSelectedTurnoAtencion(null);
+    setAtencionDiagnostico('');
+    setAtencionObservaciones('');
+    setAtencionResultado('');
+    
+    fetchTurnosReales();
+  };
+
+  // --- REGISTRAR CENTRO DE SALUD (INSERT REAL EN SUPABASE) ---
+  const handleCrearCentro = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoCentroNombre.trim()) return;
 
-    const nuevo: CentroSalud = {
-      id_centro: 'c-' + Date.now(),
+    const { error } = await supabase.from('centros_salud').insert([{
       nombre: nuevoCentroNombre,
       direccion: nuevoCentroDir,
       nivel_atencion: nuevoCentroNivel,
-      telefono: nuevoCentroTelf,
-      como_llegar: 'Línea de micros sugerida',
-      horario_fichas: '06:00 AM - 12:00 PM',
-      distrito: 'Distrito de Santa Cruz',
-      imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
-    };
+      telefono: nuevoCentroTelf
+    }]);
 
-    setCentros([...centros, nuevo]);
-    setNuevoCentroNombre('');
-    setNuevoCentroDir('');
-    setNuevoCentroTelf('');
-    alert('Hospital registrado exitosamente.');
+    if (error) {
+      alert(`Error al registrar hospital: ${error.message}`);
+    } else {
+      alert('Hospital registrado exitosamente en la base de datos de Supabase.');
+      setNuevoCentroNombre('');
+      setNuevoCentroDir('');
+      setNuevoCentroTelf('');
+
+      // Recargar centros
+      const { data: dbCentros } = await supabase.from('centros_salud').select('*');
+      if (dbCentros) {
+        const merged = dbCentros.map(dbc => {
+          const local = centrosSantaCruz.find(lc => lc.nombre.toLowerCase().includes(dbc.nombre.toLowerCase()));
+          return {
+            id_centro: dbc.id_centro,
+            nombre: dbc.nombre,
+            direccion: dbc.direccion || local?.direccion || 'Dirección de Santa Cruz',
+            nivel_atencion: dbc.nivel_atencion,
+            telefono: dbc.telefono || local?.telefono || '3330000',
+            como_llegar: local?.como_llegar || 'Líneas de micro generales',
+            horario_fichas: local?.horario_fichas || '06:00 AM - 12:00 PM',
+            distrito: local?.distrito || 'Santa Cruz de la Sierra',
+            imagen_url: local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+          };
+        });
+        setCentros(merged);
+      }
+    }
   };
 
   const handleSimularEscaneo = (ciInput: string) => {
@@ -604,7 +871,7 @@ function App() {
           <div className="flex items-center gap-3">
             <div className="bg-white border border-slate-200 p-1 rounded-2xl shadow-xs shrink-0">
               <img
-                src="/logo.jpg"
+                src="logo.jpg"
                 alt="Logo TurnoYa"
                 className="h-14 w-14 object-contain rounded-xl"
                 onError={(e) => {
@@ -644,8 +911,8 @@ function App() {
                 </button>
 
                 {showNotifPanel && (
-                  <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 text-xs font-semibold space-y-3">
-                    <h4 className="font-black text-slate-800 border-b pb-2">Notificaciones del Correo (SMTP)</h4>
+                  <div className="absolute right-0 mt-3 w-[calc(100vw-2.5rem)] sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50 text-xs font-semibold space-y-3">
+                    <h4 className="font-black text-slate-800 border-b pb-2">Notificaciones de Correo (SMTP)</h4>
                     <div className="space-y-2 max-h-60 overflow-y-auto">
                       {notificaciones.map(n => (
                         <div key={n.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
@@ -778,17 +1045,28 @@ function App() {
                 </form>
               ) : (
                 <form onSubmit={handleRegister} className="space-y-4 font-semibold">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1 sm:col-span-2">
                       <label className="text-[10px] text-slate-500 font-bold uppercase">Nro de Carnet (C.I.)</label>
-                      <input
-                        type="text"
-                        required
-                        value={regCI}
-                        onChange={(e) => setRegCI(e.target.value)}
-                        placeholder="C.I. del paciente"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={regCI}
+                          onChange={(e) => setRegCI(e.target.value)}
+                          placeholder="Ej: 12345678"
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                        />
+                        <input
+                          type="text"
+                          maxLength={5}
+                          value={regComplemento}
+                          onChange={(e) => setRegComplemento(e.target.value)}
+                          placeholder="Comp (ej. 1K)"
+                          className="w-24 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center"
+                          title="Si su carnet lleva complemento (ej: duplicado), colóquelo aquí"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-500 font-bold uppercase">Nombre y Apellido</label>
@@ -797,7 +1075,7 @@ function App() {
                         required
                         value={regNombre}
                         onChange={(e) => setRegNombre(e.target.value)}
-                        placeholder="Ej: Juan Andrés Revollo"
+                        placeholder="Ej: Juan Andrés"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                       />
                     </div>
@@ -956,6 +1234,16 @@ function App() {
                                 </button>
                               </div>
                               
+                              {centroSeleccionadoInfo.nivel_atencion === 3 && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex gap-2.5 text-[11px] text-amber-800 font-semibold leading-relaxed">
+                                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-extrabold text-amber-900">Requisito de Tercer Nivel:</p>
+                                    <p className="text-amber-700">Debe presentar su <strong>Hoja de Referencia (Formulario D7/Nº1)</strong> o su <strong>Formulario Nº4 de Tránsito</strong> al momento de su atención.</p>
+                                  </div>
+                                </div>
+                              )}
+                              
                               <button
                                 type="button"
                                 onClick={() => setWizardStep(3)}
@@ -1112,7 +1400,7 @@ function App() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h5 className="font-black text-slate-800 text-sm leading-none">{turno.nombre_centro}</h5>
                               <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : turno.estado === 'Cancelado' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
                                 {turno.estado}
                               </span>
                             </div>
@@ -1124,12 +1412,20 @@ function App() {
 
                           <div className="flex gap-2 w-full sm:w-auto shrink-0 font-bold">
                             {turno.estado === 'Pendiente' && (
-                              <button
-                                onClick={() => imprimirFicha(turno)}
-                                className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
-                              >
-                                <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha / PDF
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => imprimirFicha(turno)}
+                                  className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
+                                >
+                                  <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha / PDF
+                                </button>
+                                <button
+                                  onClick={() => handleCancelarTurno(turno)}
+                                  className="w-full sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
+                                >
+                                  <XCircle className="w-4 h-4 text-rose-500" /> Cancelar Ficha
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1253,10 +1549,10 @@ function App() {
                                 <Volume2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleMarcarProcesado(turno.id_turno)}
+                                onClick={() => setSelectedTurnoAtencion(turno)}
                                 className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
                               >
-                                <Check className="w-4 h-4" /> Marcar como Procesado (Tachar)
+                                <Check className="w-4 h-4" /> Registrar Atención (Tachar)
                               </button>
                             </>
                           )}
@@ -1272,6 +1568,81 @@ function App() {
                   </div>
 
                 </div>
+
+                {/* MODAL REGISTRAR ATENCIÓN CLÍNICA */}
+                {selectedTurnoAtencion && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-sm">
+                    <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4 border">
+                      <div className="flex justify-between items-center border-b pb-2">
+                        <h4 className="font-black text-slate-800 text-lg flex items-center gap-1.5">
+                          <FileText className="w-5 h-5 text-emerald-600" /> Registrar Atención Médica (CU04)
+                        </h4>
+                        <button onClick={() => setSelectedTurnoAtencion(null)} className="text-slate-400 hover:text-slate-800">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                        <p><strong>Paciente:</strong> {selectedTurnoAtencion.nombre_paciente}</p>
+                        <p><strong>C.I.:</strong> {selectedTurnoAtencion.ci_paciente}</p>
+                        <p><strong>Hospital:</strong> {selectedTurnoAtencion.nombre_centro}</p>
+                        <p><strong>Especialidad:</strong> {selectedTurnoAtencion.especialidad_personal_salud}</p>
+                      </div>
+
+                      <form onSubmit={handleRegistrarAtencion} className="space-y-4 font-semibold text-xs">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Diagnóstico Clínico (Obligatorio)</label>
+                          <textarea
+                            required
+                            rows={2}
+                            value={atencionDiagnostico}
+                            onChange={(e) => setAtencionDiagnostico(e.target.value)}
+                            placeholder="Ej: Gripe común y cansancio general"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Observaciones y Reposo (Opcional)</label>
+                          <textarea
+                            rows={2}
+                            value={atencionObservaciones}
+                            onChange={(e) => setAtencionObservaciones(e.target.value)}
+                            placeholder="Ej: Reposo de 3 días y abundante hidratación"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Resultado / Receta Médica (Opcional)</label>
+                          <textarea
+                            rows={2}
+                            value={atencionResultado}
+                            onChange={(e) => setAtencionResultado(e.target.value)}
+                            placeholder="Ej: Paracetamol 500mg c/8h por 3 días"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                          />
+                        </div>
+
+                        <div className="flex gap-2.5 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTurnoAtencion(null)}
+                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+                          >
+                            Registrar Atención (Tachar)
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1388,19 +1759,115 @@ function App() {
 
                 </div>
 
-                {/* Monitoreo Global */}
-                <div className="space-y-3 font-semibold text-xs">
-                  <h4 className="font-extrabold text-slate-800 text-base">Fichas Asignadas Globalmente</h4>
-                  <div className="bg-white rounded-3xl border border-slate-200 divide-y divide-slate-100 overflow-hidden shadow-xs">
-                    {turnos.map(t => (
-                      <div key={t.id_turno} className="p-4 text-[11px] flex justify-between items-center font-medium">
-                        <div>
-                          <p className="text-slate-800 font-black">{t.nombre_paciente} &rarr; {t.nombre_centro}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">{t.especialidad_personal_salud} | {t.fecha} - {t.hora}</p>
-                        </div>
-                        <span className="text-[9px] bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full font-bold">{t.estado}</span>
-                      </div>
-                    ))}
+                {/* CONFIGURACIÓN DE REPORTES Y ESTADÍSTICAS (CU05 / HU11) */}
+                <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <h4 className="font-extrabold text-slate-800 text-base flex items-center gap-1.5">
+                      <BarChart3 className="w-5 h-5 text-indigo-600" /> Reportes Estadísticos de Fichas (CU05)
+                    </h4>
+                    <button
+                      onClick={() => {
+                        const reportWindow = window.open('', '_blank');
+                        if (!reportWindow) return;
+                        reportWindow.document.write(`
+                          <html>
+                            <head>
+                              <title>Reporte de Turnos - TurnoYa</title>
+                              <style>
+                                body { font-family: sans-serif; padding: 40px; color: #334155; }
+                                h1 { color: #1e3a8a; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                                th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+                                th { background-color: #f8fafc; }
+                              </style>
+                            </head>
+                            <body>
+                              <h1>TurnoYa - Reporte Estadístico</h1>
+                              <p>Fecha de generación: ${new Date().toLocaleString()}</p>
+                              <hr />
+                              <h3>Resumen de Fichas</h3>
+                              <p><strong>Total Fichas Solicitadas:</strong> ${turnos.length}</p>
+                              <p><strong>Atendidos (Atención Médica):</strong> ${turnos.filter(t => t.estado === 'Atendido').length}</p>
+                              <p><strong>Pendientes:</strong> ${turnos.filter(t => t.estado === 'Pendiente').length}</p>
+                              <p><strong>Cancelados:</strong> ${turnos.filter(t => t.estado === 'Cancelado').length}</p>
+                              
+                              <h3>Fichas en Base de Datos</h3>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>ID Turno</th>
+                                    <th>Paciente</th>
+                                    <th>Hospital</th>
+                                    <th>Especialidad</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Estado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${turnos.map(t => `
+                                    <tr>
+                                      <td>${t.id_turno.substring(0,8)}</td>
+                                      <td>${t.nombre_paciente}</td>
+                                      <td>${t.nombre_centro}</td>
+                                      <td>${t.especialidad_personal_salud}</td>
+                                      <td>${t.fecha} - ${t.hora}</td>
+                                      <td>${t.estado}</td>
+                                    </tr>
+                                  `).join('')}
+                                </tbody>
+                              </table>
+                              <script>window.onload = function() { window.print(); }</script>
+                            </body>
+                          </html>
+                        `);
+                        reportWindow.document.close();
+                      }}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1 cursor-pointer border border-indigo-200"
+                    >
+                      <Download className="w-4 h-4" /> Exportar Reporte (PDF/Imprimir)
+                    </button>
+                  </div>
+
+                  {/* Tarjetas de Métricas */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="bg-slate-50 border rounded-2xl p-4 text-center">
+                      <p className="text-[10px] text-slate-500 font-extrabold uppercase">Total Solicitudes</p>
+                      <p className="text-2xl font-black text-slate-800">{turnos.length}</p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+                      <p className="text-[10px] text-emerald-600 font-extrabold uppercase">Atendidos</p>
+                      <p className="text-2xl font-black text-emerald-800">{turnos.filter(t => t.estado === 'Atendido').length}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
+                      <p className="text-[10px] text-amber-600 font-extrabold uppercase">Pendientes</p>
+                      <p className="text-2xl font-black text-amber-800">{turnos.filter(t => t.estado === 'Pendiente').length}</p>
+                    </div>
+                    <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-center">
+                      <p className="text-[10px] text-rose-600 font-extrabold uppercase">Cancelados</p>
+                      <p className="text-2xl font-black text-rose-800">{turnos.filter(t => t.estado === 'Cancelado').length}</p>
+                    </div>
+                  </div>
+
+                  {/* Demanda de Especialidades */}
+                  <div className="space-y-3 pt-2">
+                    <h5 className="font-extrabold text-slate-500 text-xs uppercase">Demanda por Especialidad</h5>
+                    <div className="space-y-2.5">
+                      {['Medicina General', 'Pediatría', 'Neurología', 'Cardiología'].map(esp => {
+                        const count = turnos.filter(t => t.especialidad_personal_salud === esp).length;
+                        const percentage = turnos.length > 0 ? (count / turnos.length) * 100 : 0;
+                        return (
+                          <div key={esp} className="space-y-1 text-xs font-semibold">
+                            <div className="flex justify-between font-bold">
+                              <span className="text-slate-700">{esp}</span>
+                              <span className="text-slate-500">{count} Fichas ({percentage.toFixed(0)}%)</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                              <div className="bg-indigo-600 h-full transition-all duration-500" style={{ width: `${percentage}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
