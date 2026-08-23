@@ -656,7 +656,7 @@ function App() {
       const centroObj = centros.find(c => c.id_centro === selectedCentroId);
       const espObj = especialidadesSantaCruz.find(e => e.id_especialidad === selectedEspecialidadId);
       
-      fetch('https://api.resend.com/emails', {
+      fetch('https://corsproxy.io/?https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${RESEND_API_KEY}`,
