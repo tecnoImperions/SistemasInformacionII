@@ -28,6 +28,9 @@ import {
   XCircle
 } from 'lucide-react'
 
+// Coloca aquí tu API Key de Resend (ej: re_123456789...) para envío real de correos a Gmail
+const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
+
 // --- DEFINICIONES DE TIPOS ---
 interface CentroSalud {
   id_centro: string;
@@ -581,6 +584,14 @@ function App() {
             <h2>TurnoYa</h2>
             <p style="font-size:13px; font-weight:extrabold; color: #475569; margin: 0; letter-spacing:1px;">FICHA CONFIRMADA</p>
             <div class="code">#${turno.id_turno.substring(2, 8).toUpperCase()}</div>
+            
+            <!-- Código QR Real Generado con la C.I. del Paciente -->
+            <img 
+              src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${turno.ci_paciente}" 
+              alt="Código QR de Ficha" 
+              style="margin: 15px auto; display: block; width: 120px; height: 120px; border: 1px solid #cbd5e1; padding: 4px; background: white; border-radius: 8px;" 
+            />
+
             <div class="details">
               <p><strong>Paciente:</strong> ${turno.nombre_paciente}</p>
               <p><strong>C.I. del Paciente:</strong> ${turno.ci_paciente}</p>
@@ -639,6 +650,43 @@ function App() {
       fecha: 'Hace un momento'
     };
     setNotificaciones([nuevaNotif, ...notificaciones]);
+
+    // Enviar correo SMTP real usando la API de Resend
+    if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
+      const centroObj = centros.find(c => c.id_centro === selectedCentroId);
+      const espObj = especialidadesSantaCruz.find(e => e.id_especialidad === selectedEspecialidadId);
+      
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: 'TurnoYa <onboarding@resend.dev>',
+          to: [currentUser.correo],
+          subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+              <h2 style="color: #2563eb; margin-top: 0; font-size: 22px; font-weight: 800; border-bottom: 2px solid #eff6ff; padding-bottom: 10px;">TurnoYa - Confirmación</h2>
+              <p>Estimado(a) <strong>${currentUser.nombre}</strong>,</p>
+              <p>Su ficha médica ha sido reservada con éxito en la base de datos de nuestro sistema.</p>
+              
+              <div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; border-radius: 12px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Código de Cita:</strong> #${idCita.substring(2, 8).toUpperCase()}</p>
+                <p style="margin: 5px 0;"><strong>Hospital / Centro:</strong> ${centroObj ? centroObj.nombre : 'Hospital Seleccionado'}</p>
+                <p style="margin: 5px 0;"><strong>Especialidad:</strong> ${espObj ? espObj.nombre : 'Medicina General'}</p>
+                <p style="margin: 5px 0;"><strong>Fecha y Hora:</strong> ${selectedHorarioObj.fecha} a las ${selectedHorarioObj.hora_inicio}</p>
+              </div>
+              
+              <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 0;">
+                <strong>Importante:</strong> Recuerde presentarse 15 minutos antes con su Cédula de Identidad física. En caso de centros de Tercer Nivel, es requisito obligatorio portar su Hoja de Referencia (Formulario D7 / Nº1).
+              </p>
+            </div>
+          `
+        })
+      }).catch(err => console.error("Error al enviar email por Resend:", err));
+    }
 
     // Recargar horarios y turnos de Supabase
     fetchTurnosReales();
