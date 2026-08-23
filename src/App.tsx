@@ -243,6 +243,7 @@ function App() {
   const [regCI, setRegCI] = useState('');
   const [regComplemento, setRegComplemento] = useState('');
   const [regNombre, setRegNombre] = useState('');
+  const [regApellido, setRegApellido] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
@@ -531,7 +532,7 @@ function App() {
     const { error } = await supabase.auth.signUp({
       email: regEmail,
       password: regPassword,
-      options: { data: { ci: finalCI, nombre: regNombre, rol: 'paciente' } }
+      options: { data: { ci: finalCI, nombre: regNombre, apellido: regApellido, rol: 'paciente' } }
     });
     if (error) {
       triggerAlert('Error de Registro', `Error al registrarse: ${error.message}`, 'error');
@@ -539,6 +540,8 @@ function App() {
       triggerAlert('Registro Exitoso', '¡Cuenta de paciente creada exitosamente en Supabase!', 'success');
       setRegCI('');
       setRegComplemento('');
+      setRegNombre('');
+      setRegApellido('');
     }
   };
 
@@ -1100,7 +1103,7 @@ function App() {
               ) : (
                 <form onSubmit={handleRegister} className="space-y-4 font-semibold">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-1 sm:col-span-2">
+                    <div className="space-y-1 sm:col-span-3">
                       <label className="text-[10px] text-slate-500 font-bold uppercase">Nro de Carnet (C.I.)</label>
                       <div className="flex gap-2">
                         <input
@@ -1117,19 +1120,33 @@ function App() {
                           value={regComplemento}
                           onChange={(e) => setRegComplemento(e.target.value)}
                           placeholder="Comp (ej. 1K)"
-                          className="w-24 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center"
+                          className="w-28 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center"
                           title="Si su carnet lleva complemento (ej: duplicado), colóquelo aquí"
                         />
                       </div>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase">Nombre y Apellido</label>
+                      <label className="text-[10px] text-slate-500 font-bold uppercase">Nombres</label>
                       <input
                         type="text"
                         required
                         value={regNombre}
                         onChange={(e) => setRegNombre(e.target.value)}
                         placeholder="Ej: Juan Andrés"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase">Apellidos</label>
+                      <input
+                        type="text"
+                        required
+                        value={regApellido}
+                        onChange={(e) => setRegApellido(e.target.value)}
+                        placeholder="Ej: Revollo Gutiérrez"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                       />
                     </div>
@@ -1524,26 +1541,80 @@ function App() {
                           <X className="w-5 h-5" />
                         </button>
                       </div>
-                      <div className="bg-slate-50 border rounded-2xl p-4 text-center space-y-3">
-                        <p className="text-xs text-slate-500 font-medium">Ingrese la C.I. del paciente para simular la lectura de su código QR:</p>
-                        <input
-                          type="text"
-                          value={ciEscaneada}
-                          onChange={(e) => setCiEscaneada(e.target.value)}
-                          placeholder="Ej: 7766554"
-                          className="w-full bg-white border border-slate-200 rounded-xl p-3 text-center text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
+                      <div className="space-y-4 text-left">
+                        <style>{`
+                          @keyframes scanSweep {
+                            0% { top: 4%; }
+                            50% { top: 96%; }
+                            100% { top: 4%; }
+                          }
+                        `}</style>
+                        <div className="relative h-44 bg-slate-950 rounded-2xl flex flex-col items-center justify-center overflow-hidden border border-slate-800">
+                          {/* LASER SCANNING LINE */}
+                          <div 
+                            className="absolute left-[4%] right-[4%] h-0.5 bg-emerald-400 shadow-[0_0_10px_#34d399] z-10"
+                            style={{ animation: 'scanSweep 2.5s infinite ease-in-out' }}
+                          ></div>
+                          {/* SCANNER VIEWPORT CORNER BORDERS */}
+                          <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-emerald-400"></div>
+                          <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-emerald-400"></div>
+                          <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-emerald-400"></div>
+                          <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-emerald-400"></div>
+                          
+                          {/* QR ICON BACKGROUND */}
+                          <QrCode className="w-16 h-16 text-slate-800 animate-pulse" />
+                          <span className="text-[9px] text-emerald-400 font-mono mt-2 uppercase tracking-widest animate-pulse">Lente de Escaneo Activo</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Simular código QR detectado en cámara</label>
+                          {turnos.filter(t => t.estado === 'Pendiente').length > 0 ? (
+                            <select
+                              onChange={(e) => {
+                                setCiEscaneada(e.target.value);
+                              }}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                              value={ciEscaneada}
+                            >
+                              <option value="">-- Seleccione una ficha detectada --</option>
+                              {turnos.filter(t => t.estado === 'Pendiente').map(t => (
+                                <option key={t.id_turno} value={t.ci_paciente}>
+                                  Ficha #${t.id_turno.substring(2,8).toUpperCase()} - C.I. {t.ci_paciente} ({t.nombre_paciente})
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-[10px] text-slate-400 italic">No hay fichas pendientes de pacientes en la base de datos de Supabase.</p>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2">
+                          <p className="text-[10px] text-slate-500 font-medium">O ingrese la C.I. manualmente si es una ficha física:</p>
+                          <input
+                            type="text"
+                            value={ciEscaneada}
+                            onChange={(e) => setCiEscaneada(e.target.value)}
+                            placeholder="Ej: 7766554"
+                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-center text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
                       </div>
-                      <div className="flex gap-2">
+
+                      <div className="flex gap-2 font-bold text-xs">
                         <button
+                          type="button"
                           onClick={() => setMostrarEscaneoSimulado(false)}
-                          className="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl text-xs font-bold cursor-pointer"
+                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl cursor-pointer"
                         >
                           Cancelar
                         </button>
                         <button
-                          onClick={() => handleSimularEscaneo(ciEscaneada)}
-                          className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold cursor-pointer"
+                          type="button"
+                          onClick={() => {
+                            handleSimularEscaneo(ciEscaneada);
+                            setMostrarEscaneoSimulado(false);
+                          }}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl cursor-pointer"
                         >
                           Confirmar Escaneo
                         </button>
