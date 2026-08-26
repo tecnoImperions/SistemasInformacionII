@@ -329,11 +329,9 @@ function App() {
   const [patientFilterTab, setPatientFilterTab] = useState<'activas' | 'historial'>('activas');
   const [patientPage, setPatientPage] = useState<number>(1);
   const [expandedTurnoId, setExpandedTurnoId] = useState<string>('');
-  const [activeMapTab, setActiveMapTab] = useState<'list' | 'map'>('list');
   const [encargadoFilterTab, setEncargadoFilterTab] = useState<'pendientes' | 'procesados' | 'cancelados'>('pendientes');
   const [encargadoPage, setEncargadoPage] = useState<number>(1);
   const itemsPerPage = 5;
-  const [selectedMapCentroId, setSelectedMapCentroId] = useState<string>('c-1');
 
   // --- ENRUTADOR POR HASH ---
   const [currentRole, setCurrentRole] = useState<'paciente' | 'encargado' | 'admin'>('paciente');
