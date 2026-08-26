@@ -25,7 +25,9 @@ import {
   BarChart3,
   Download,
   FileText,
-  XCircle
+  XCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 
 // Coloca aquí tu API Key de Resend (ej: re_123456789...) para envío real de correos a Gmail
@@ -42,6 +44,9 @@ interface CentroSalud {
   horario_fichas: string;
   distrito: string;
   imagen_url: string;
+  latitud?: number;
+  longitud?: number;
+  especialidades?: string[];
 }
 
 interface Especialidad {
@@ -111,7 +116,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 38, 47, 68, 86, 121 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 12:00 PM',
     distrito: 'Distrito 8 (Plan Tres Mil)',
-    imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.82276,
+    longitud: -63.12574,
+    especialidades: ['e-1', 'e-2', 'e-4']
   },
   {
     id_centro: 'c-2',
@@ -122,7 +130,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 16, 43, 45, 87 (Integrado con Cruzero)',
     horario_fichas: '06:30 AM - 12:30 PM',
     distrito: 'Distrito 6 (Pampa de la Isla)',
-    imagen_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.76118,
+    longitud: -63.13289,
+    especialidades: ['e-1', 'e-2']
   },
   {
     id_centro: 'c-3',
@@ -133,7 +144,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 9, 13, 34, 103 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 01:00 PM',
     distrito: 'Distrito 7 (Villa Primero de Mayo)',
-    imagen_url: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.78912,
+    longitud: -63.13689,
+    especialidades: ['e-1']
   },
   {
     id_centro: 'c-4',
@@ -144,7 +158,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 39, 44, 76, 110 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 12:00 PM',
     distrito: 'Distrito 9 (Zona Sur)',
-    imagen_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.82672,
+    longitud: -63.17983,
+    especialidades: ['e-1', 'e-2', 'e-4']
   },
   {
     id_centro: 'c-5',
@@ -155,7 +172,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 22, 54, 82, 119 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 12:00 PM',
     distrito: 'Distrito 10 (Zona Oeste)',
-    imagen_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.80112,
+    longitud: -63.22012,
+    especialidades: ['e-1']
   },
   {
     id_centro: 'c-6',
@@ -166,7 +186,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 10, 11, 27, 28, 42, 60 (Integrado con Cruzero)',
     horario_fichas: '05:30 AM - 11:30 AM',
     distrito: 'Distrito 11 (Centro)',
-    imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.78878,
+    longitud: -63.18578,
+    especialidades: ['e-1', 'e-3', 'e-4']
   },
   {
     id_centro: 'c-7',
@@ -177,7 +200,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 12, 17, 18, 51, 64 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 12:00 PM',
     distrito: 'Distrito 11 (Centro)',
-    imagen_url: 'https://images.unsplash.com/photo-1502740479796-62dd97864002?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1502740479796-62dd97864002?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.78189,
+    longitud: -63.18212,
+    especialidades: ['e-2']
   },
   {
     id_centro: 'c-8',
@@ -188,7 +214,10 @@ const centrosSantaCruz: CentroSalud[] = [
     como_llegar: 'Micros: 45, 75, 87, 102 (Integrado con Cruzero)',
     horario_fichas: '06:00 AM - 01:00 PM',
     distrito: 'Distrito 6 (Pampa de la Isla)',
-    imagen_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=400'
+    imagen_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&q=80&w=400',
+    latitud: -17.76912,
+    longitud: -63.14989,
+    especialidades: ['e-1', 'e-3', 'e-4']
   }
 ];
 
@@ -199,10 +228,52 @@ const especialidadesSantaCruz: Especialidad[] = [
   { id_especialidad: 'e-4', nombre: 'Cardiología', descripcion: 'Control preventivo cardiovascular', iconName: 'Activity' }
 ];
 
+const obtenerConsultorio = (nombreEspecialidad: string) => {
+  if (nombreEspecialidad.toLowerCase().includes('general')) return 'Consultorio 101 (Planta Baja)';
+  if (nombreEspecialidad.toLowerCase().includes('pediat')) return 'Consultorio 104 (Planta Baja)';
+  if (nombreEspecialidad.toLowerCase().includes('neuro')) return 'Consultorio 203 (1er Piso)';
+  if (nombreEspecialidad.toLowerCase().includes('cardio')) return 'Consultorio 205 (1er Piso)';
+  return 'Consultorio de Turno (Triaje)';
+};
+
+const calcularEsperaCola = (turnoActual: Turno, todosLosTurnos: Turno[]) => {
+  // Filtra todos los turnos para la misma fecha, hospital y especialidad
+  const turnosMismoDia = todosLosTurnos.filter(t => 
+    t.fecha === turnoActual.fecha && 
+    t.id_centro === turnoActual.id_centro &&
+    t.especialidad_personal_salud === turnoActual.especialidad_personal_salud
+  );
+  
+  // Contar cuántos turnos en estado 'Pendiente' tienen una fecha_solicitud anterior a la de nuestro turno
+  const pendientesAntes = turnosMismoDia.filter(t => 
+    t.estado === 'Pendiente' && 
+    new Date(t.fecha_solicitud).getTime() < new Date(turnoActual.fecha_solicitud).getTime()
+  ).length;
+
+  // El número de ficha actual que está siendo atendido (el último con estado 'Atendido')
+  const atendidosHoy = turnosMismoDia.filter(t => t.estado === 'Atendido');
+  let fichaAtendiendose = 'Ninguna';
+  if (atendidosHoy.length > 0) {
+    const ultimoAtendido = atendidosHoy.reduce((prev, curr) => 
+      new Date(prev.fecha_solicitud).getTime() > new Date(curr.fecha_solicitud).getTime() ? prev : curr
+    );
+    fichaAtendiendose = `#${ultimoAtendido.id_turno.substring(2, 8).toUpperCase()}`;
+  } else if (turnosMismoDia.filter(t => t.estado === 'Pendiente').length > 0) {
+    fichaAtendiendose = 'Iniciando';
+  }
+
+  return {
+    personasDelante: pendientesAntes,
+    fichaEnConsulta: fichaAtendiendose,
+    posicionFila: pendientesAntes + 1
+  };
+};
+
 
 function App() {
   // --- ACCESIBILIDAD MÁXIMA POR DEFECTO (VISTA ENORME / PANTALLA GRANDE) ---
   const [isSuperSize, setIsSuperSize] = useState<boolean>(true);
+  const [audioGuia, setAudioGuia] = useState<boolean>(false);
 
   // --- PERSISTENCIA Y RECUERDO DE SESIÓN ---
   const [rememberMe, setRememberMe] = useState<boolean>(true);
@@ -212,6 +283,7 @@ function App() {
 
   // --- POPUPS Y NOTIFICACIONES ---
   const [showCruzeroMap, setShowCruzeroMap] = useState<boolean>(false);
+  const [showGoogleMapModal, setShowGoogleMapModal] = useState<boolean>(false);
   const [activeRouteInfo, setActiveRouteInfo] = useState<string>('');
   const [notificaciones, setNotificaciones] = useState<NotificacionPush[]>([
     { id: '1', titulo: 'Sistema Activo', mensaje: 'TurnoYa está listo para regular las colas en los hospitales.', tipo: 'push', fecha: 'Hoy' }
@@ -255,9 +327,13 @@ function App() {
 
   // --- FILTROS Y PAGINACIÓN DE VOLÚMENES MASIVOS ---
   const [patientFilterTab, setPatientFilterTab] = useState<'activas' | 'historial'>('activas');
+  const [patientPage, setPatientPage] = useState<number>(1);
+  const [expandedTurnoId, setExpandedTurnoId] = useState<string>('');
+  const [activeMapTab, setActiveMapTab] = useState<'list' | 'map'>('list');
   const [encargadoFilterTab, setEncargadoFilterTab] = useState<'pendientes' | 'procesados' | 'cancelados'>('pendientes');
   const [encargadoPage, setEncargadoPage] = useState<number>(1);
   const itemsPerPage = 5;
+  const [selectedMapCentroId, setSelectedMapCentroId] = useState<string>('c-1');
 
   // --- ENRUTADOR POR HASH ---
   const [currentRole, setCurrentRole] = useState<'paciente' | 'encargado' | 'admin'>('paciente');
@@ -286,6 +362,10 @@ function App() {
   const [nuevoCentroDir, setNuevoCentroDir] = useState('');
   const [nuevoCentroNivel, setNuevoCentroNivel] = useState<number>(2);
   const [nuevoCentroTelf, setNuevoCentroTelf] = useState('');
+  const [nuevoCentroImagenUrl, setNuevoCentroImagenUrl] = useState('');
+  const [nuevoCentroLat, setNuevoCentroLat] = useState('50');
+  const [nuevoCentroLong, setNuevoCentroLong] = useState('50');
+  const [nuevoCentroEspecialidades, setNuevoCentroEspecialidades] = useState<string[]>(['e-1']);
 
   // --- REGISTRAR ATENCIÓN MÉDICA (ENCARGADO/PERSONAL DE SALUD) ---
   const [selectedTurnoAtencion, setSelectedTurnoAtencion] = useState<Turno | null>(null);
@@ -308,6 +388,35 @@ function App() {
     window.addEventListener('hashchange', syncHash);
     return () => window.removeEventListener('hashchange', syncHash);
   }, []);
+
+  // Audioguía de asistencia para personas mayores / adultos mayores
+  useEffect(() => {
+    if (!audioGuia) {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      return;
+    }
+    
+    let texto = '';
+    if (wizardStep === 1) {
+      texto = "Paso 1. Seleccione el nivel de atención médica. Presione Segundo Nivel para hospitales de distrito, o Tercer Nivel para hospitales especializados de tercer nivel.";
+    } else if (wizardStep === 2) {
+      texto = "Paso 2. Seleccione el hospital de la lista del panel izquierdo o en el mapa interactivo. Una vez seleccionado, presione el botón azul que dice Reservar Turno Aquí.";
+    } else if (wizardStep === 3) {
+      texto = "Paso 3. Seleccione la especialidad médica que necesita en los botones de abajo.";
+    } else if (wizardStep === 4) {
+      texto = "Paso 4. Elija el día y la hora de consulta que mejor le convenga en la lista de horarios disponibles.";
+    } else if (wizardStep === 5) {
+      texto = "Paso 5. Escriba sus síntomas de forma opcional. Luego marque las casillas para confirmar que llevará su carnet de identidad original, fotocopia, y referencia si corresponde. Por último, presione Confirmar y Sacar Ficha.";
+    }
+
+    if (texto && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const msg = new SpeechSynthesisUtterance(texto);
+      msg.lang = 'es-ES';
+      msg.rate = 0.95; // Slightly slower speed for older adults
+      window.speechSynthesis.speak(msg);
+    }
+  }, [wizardStep, audioGuia]);
 
   // Cargar turnos reales (Fichas) de la base de datos de Supabase
   const fetchTurnosReales = async () => {
@@ -492,7 +601,10 @@ function App() {
             como_llegar: local?.como_llegar || 'Líneas de micro generales',
             horario_fichas: local?.horario_fichas || '06:00 AM - 12:00 PM',
             distrito: local?.distrito || 'Santa Cruz de la Sierra',
-            imagen_url: local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+            imagen_url: dbc.imagen_url || local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+            latitud: dbc.latitud !== undefined && dbc.latitud !== null ? dbc.latitud : (local?.latitud || 50),
+            longitud: dbc.longitud !== undefined && dbc.longitud !== null ? dbc.longitud : (local?.longitud || 50),
+            especialidades: dbc.especialidades || local?.especialidades || ['e-1']
           };
         });
         setCentros(merged);
@@ -606,8 +718,20 @@ function App() {
               <p><strong>C.I. del Paciente:</strong> ${turno.ci_paciente}</p>
               <p><strong>Hospital:</strong> ${turno.nombre_centro}</p>
               <p><strong>Especialidad:</strong> ${turno.especialidad_personal_salud}</p>
+              <p><strong>Consultorio:</strong> ${obtenerConsultorio(turno.especialidad_personal_salud)}</p>
               <p><strong>Fecha y Hora:</strong> ${turno.fecha} - ${turno.hora}</p>
             </div>
+            
+            <div style="margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px; text-align: left; font-size: 11px; line-height: 1.4; color: #475569;">
+              <p style="margin: 3px 0; font-weight: bold; color: #1e293b;">Requisitos para su atención:</p>
+              <p style="margin: 2px 0;">[ ] Cédula de Identidad (Original Vigente)</p>
+              <p style="margin: 2px 0;">[ ] Fotocopia legible de C.I.</p>
+              ${turno.nombre_centro.toLowerCase().includes('san juan de dios') || turno.nombre_centro.toLowerCase().includes('niño') || turno.nombre_centro.toLowerCase().includes('japon')
+                ? '<p style="margin: 2px 0; color: #b91c1c; font-weight: bold;">[ ] Formulario de Referencia D7 (Físico)</p>'
+                : ''
+              }
+            </div>
+
             <div class="footer">
               <p>Evite hacer colas temprano. Preséntese 15 minutos antes con su C.I.</p>
               <p>TurnoYa - Santa Cruz de la Sierra</p>
@@ -685,11 +809,23 @@ function App() {
                 <p style="margin: 5px 0;"><strong>Código de Cita:</strong> #${idCita.substring(2, 8).toUpperCase()}</p>
                 <p style="margin: 5px 0;"><strong>Hospital / Centro:</strong> ${centroObj ? centroObj.nombre : 'Hospital Seleccionado'}</p>
                 <p style="margin: 5px 0;"><strong>Especialidad:</strong> ${espObj ? espObj.nombre : 'Medicina General'}</p>
+                <p style="margin: 5px 0;"><strong>Consultorio:</strong> ${obtenerConsultorio(espObj ? espObj.nombre : '')}</p>
                 <p style="margin: 5px 0;"><strong>Fecha y Hora:</strong> ${selectedHorarioObj.fecha} a las ${selectedHorarioObj.hora_inicio}</p>
+              </div>
+
+              <div style="margin: 20px 0; background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 12px; font-size: 13px; color: #1e3a8a;">
+                <strong style="display: block; margin-bottom: 5px;">Documentos obligatorios para presentarse:</strong>
+                <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                  <li>Cédula de Identidad original vigente.</li>
+                  <li>Fotocopia legible de la Cédula de Identidad.</li>
+                  ${(centroObj?.nivel_atencion === 3) 
+                    ? '<li style="font-weight: bold; color: #b91c1c;">Formulario de Referencia D7 (Obligatorio para Tercer Nivel)</li>' 
+                    : ''}
+                </ul>
               </div>
               
               <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 0;">
-                <strong>Importante:</strong> Recuerde presentarse 15 minutos antes con su Cédula de Identidad física. En caso de centros de Tercer Nivel, es requisito obligatorio portar su Hoja de Referencia (Formulario D7 / Nº1).
+                <strong>Importante:</strong> No madrugue. Al contar con su ficha registrada, su cupo está garantizado. Preséntese en el hospital exactamente 15 minutos antes de su cita.
               </p>
             </div>
           `
@@ -859,16 +995,32 @@ function App() {
       nombre: nuevoCentroNombre,
       direccion: nuevoCentroDir,
       nivel_atencion: nuevoCentroNivel,
-      telefono: nuevoCentroTelf
+      telefono: nuevoCentroTelf,
+      imagen_url: nuevoCentroImagenUrl || null,
+      latitud: parseFloat(nuevoCentroLat) || 50,
+      longitud: parseFloat(nuevoCentroLong) || 50,
+      especialidades: nuevoCentroEspecialidades
     }]);
 
     if (error) {
-      triggerAlert('Error', `Error al registrar hospital: ${error.message}`, 'error');
+      if (error.message.includes('does not exist') || error.code === '42703') {
+        triggerAlert(
+          'Alerta de Base de Datos',
+          `Debe ejecutar primero el script SQL de migración en Supabase para agregar las nuevas columnas (imagen_url, latitud, longitud, especialidades). Detalle: ${error.message}`,
+          'error'
+        );
+      } else {
+        triggerAlert('Error', `Error al registrar hospital: ${error.message}`, 'error');
+      }
     } else {
       triggerAlert('Hospital Registrado', 'Hospital registrado exitosamente en la base de datos de Supabase.', 'success');
       setNuevoCentroNombre('');
       setNuevoCentroDir('');
       setNuevoCentroTelf('');
+      setNuevoCentroImagenUrl('');
+      setNuevoCentroLat('50');
+      setNuevoCentroLong('50');
+      setNuevoCentroEspecialidades(['e-1']);
 
       // Recargar centros
       const { data: dbCentros } = await supabase.from('centros_salud').select('*');
@@ -884,7 +1036,10 @@ function App() {
             como_llegar: local?.como_llegar || 'Líneas de micro generales',
             horario_fichas: local?.horario_fichas || '06:00 AM - 12:00 PM',
             distrito: local?.distrito || 'Santa Cruz de la Sierra',
-            imagen_url: local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400'
+            imagen_url: dbc.imagen_url || local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+            latitud: dbc.latitud !== undefined && dbc.latitud !== null ? dbc.latitud : (local?.latitud || 50),
+            longitud: dbc.longitud !== undefined && dbc.longitud !== null ? dbc.longitud : (local?.longitud || 50),
+            especialidades: dbc.especialidades || local?.especialidades || ['e-1']
           };
         });
         setCentros(merged);
@@ -918,10 +1073,6 @@ function App() {
 
   const horariosDisponibles = obtenerHorarios();
   const centroSeleccionadoInfo = centros.find(c => c.id_centro === selectedCentroId);
-  const turnosFiltradosEncargada = turnos.filter(t => {
-    if (!filtroBusquedaCargada) return true;
-    return t.ci_paciente.includes(filtroBusquedaCargada) || t.id_turno.includes(filtroBusquedaCargada);
-  });
 
   const isAuthorized = !isLoggedIn || !currentUser || currentUser.rol === currentRole;
 
@@ -957,6 +1108,15 @@ function App() {
                 className={`px-3 py-2 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1 ${isSuperSize ? 'bg-blue-600 text-white border border-blue-700' : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
               >
                 🔎 {isSuperSize ? 'Vista Normal' : 'Texto Grande'}
+              </button>
+
+              {/* BOTÓN AUDIO GUÍA (ASISTENTE DE VOZ) */}
+              <button
+                type="button"
+                onClick={() => setAudioGuia(!audioGuia)}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black transition cursor-pointer flex items-center gap-1 ${audioGuia ? 'bg-emerald-600 text-white border border-emerald-700' : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'}`}
+              >
+                {audioGuia ? '🔊 Desactivar Voz' : '🔈 Activar Voz'}
               </button>
 
               {/* NOTIFICACIONES */}
@@ -1224,10 +1384,10 @@ function App() {
 
             {/* VISTA DEL PACIENTE (#paciente) */}
             {currentRole === 'paciente' && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-fadeIn">
                 
                 {/* WIZARD PASO A PASO */}
-                <div className="bg-white rounded-3xl border-2 border-slate-200 p-6 md:p-8 shadow-lg space-y-6">
+                <div id="booking-wizard-card" className="bg-white rounded-3xl border-2 border-slate-200 p-6 md:p-8 shadow-lg space-y-6">
                   
                   <div className="flex justify-between items-center border-b-2 border-slate-100 pb-4">
                     <h3 className="font-black text-slate-800 text-base md:text-lg flex items-center gap-2">
@@ -1304,6 +1464,15 @@ function App() {
                               <p><strong>Horario Fichas:</strong> {centroSeleccionadoInfo.horario_fichas}</p>
                               <p><strong>📞 Teléfono:</strong> {centroSeleccionadoInfo.telefono}</p>
                               
+                              {/* BOTÓN VER MAPA DE GOOGLE MAPS */}
+                              <button
+                                type="button"
+                                onClick={() => setShowGoogleMapModal(true)}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
+                              >
+                                <Map className="w-4 h-4 text-blue-600 animate-pulse" /> Ver Ubicación en Google Maps
+                              </button>
+                              
                               {/* INFORMACION DE CRUZERO INTEGRACION */}
                               <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-2">
                                 <div className="flex items-center gap-1">
@@ -1360,18 +1529,35 @@ function App() {
                     <div className="space-y-4">
                       <p className="text-sm md:text-base text-slate-500 font-bold font-semibold">3. ¿Qué especialidad médica requiere?</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {especialidades.map(esp => (
-                          <button
-                            key={esp.id_especialidad}
-                            onClick={() => { setSelectedEspecialidadId(esp.id_especialidad); setWizardStep(4); }}
-                            className="p-5 border-2 border-slate-200 rounded-2xl hover:border-blue-600 text-center hover:bg-blue-50/20 transition flex flex-col items-center justify-center space-y-3 cursor-pointer"
-                          >
-                            <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
-                              {esp.nombre === 'Neurología' ? <Brain className="w-6 h-6" /> : esp.nombre === 'Pediatría' ? <Baby className="w-6 h-6" /> : esp.nombre === 'Cardiología' ? <Activity className="w-6 h-6" /> : <Stethoscope className="w-6 h-6" />}
-                            </div>
-                            <h5 className="font-extrabold text-slate-800 text-xs leading-tight">{esp.nombre}</h5>
-                          </button>
-                        ))}
+                        {(() => {
+                          const centroSeleccionado = centros.find(c => c.id_centro === selectedCentroId);
+                          const especialidadesDisponibles = especialidades.filter(esp => {
+                            if (!centroSeleccionado?.especialidades) return true; // fallback
+                            return centroSeleccionado.especialidades.includes(esp.id_especialidad);
+                          });
+
+                          if (especialidadesDisponibles.length === 0) {
+                            return (
+                              <p className="col-span-full text-center py-4 text-xs text-slate-400 font-bold italic">
+                                No hay especialidades configuradas para este hospital.
+                              </p>
+                            );
+                          }
+
+                          return especialidadesDisponibles.map(esp => (
+                            <button
+                              key={esp.id_especialidad}
+                              type="button"
+                              onClick={() => { setSelectedEspecialidadId(esp.id_especialidad); setWizardStep(4); }}
+                              className="p-5 border-2 border-slate-200 rounded-2xl hover:border-blue-600 text-center hover:bg-blue-50/20 transition flex flex-col items-center justify-center space-y-3 cursor-pointer"
+                            >
+                              <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+                                {esp.nombre === 'Neurología' ? <Brain className="w-6 h-6" /> : esp.nombre === 'Pediatría' ? <Baby className="w-6 h-6" /> : esp.nombre === 'Cardiología' ? <Activity className="w-6 h-6" /> : <Stethoscope className="w-6 h-6" />}
+                              </div>
+                              <h5 className="font-extrabold text-slate-800 text-xs leading-tight">{esp.nombre}</h5>
+                            </button>
+                          ));
+                        })()}
                       </div>
                       <button onClick={() => setWizardStep(2)} className="text-xs text-slate-500 hover:underline pt-2 block font-medium">
                         &larr; Volver al paso anterior
@@ -1418,7 +1604,29 @@ function App() {
                       <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2 text-slate-700">
                         <p><strong>Hospital:</strong> {centros.find(c => c.id_centro === selectedCentroId)?.nombre}</p>
                         <p><strong>Especialidad:</strong> {especialidades.find(esp => esp.id_especialidad === selectedEspecialidadId)?.nombre}</p>
+                        <p><strong>Consultorio Asignado:</strong> {obtenerConsultorio(especialidades.find(esp => esp.id_especialidad === selectedEspecialidadId)?.nombre || '')}</p>
                         <p><strong>Fecha y Hora:</strong> {selectedHorarioObj.fecha} a las {selectedHorarioObj.hora_inicio} AM</p>
+                      </div>
+
+                      {/* Checklist interactivo obligatorio de Requisitos */}
+                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-2 text-slate-700">
+                        <p className="font-extrabold text-[10px] text-blue-800 uppercase tracking-wider block">📋 Confirme que cuenta con los requisitos físicos obligatorios:</p>
+                        <div className="space-y-2 text-[11px] text-slate-600">
+                          <label className="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" required className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                            <span>Tengo mi <strong>Cédula de Identidad original vigente</strong></span>
+                          </label>
+                          <label className="flex items-center gap-2.5 cursor-pointer">
+                            <input type="checkbox" required className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                            <span>Tengo una <strong>Fotocopia legible de mi C.I.</strong></span>
+                          </label>
+                          {centros.find(c => c.id_centro === selectedCentroId)?.nivel_atencion === 3 && (
+                            <label className="flex items-start gap-2.5 cursor-pointer text-rose-700">
+                              <input type="checkbox" required className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 mt-0.5 cursor-pointer" />
+                              <span className="font-black">Tengo la <strong>Hoja de Referencia (Formulario D7)</strong> original firmada y sellada</span>
+                            </label>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-1">
@@ -1479,6 +1687,47 @@ function App() {
                   </div>
                 )}
 
+                {/* MODAL DE UBICACIÓN EN GOOGLE MAPS */}
+                {showGoogleMapModal && centroSeleccionadoInfo && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+                    <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-100 p-5 space-y-4">
+                      <div className="flex justify-between items-center border-b pb-2">
+                        <h4 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                          <Map className="w-5 h-5 text-blue-600 animate-pulse" /> Ubicación: {centroSeleccionadoInfo.nombre}
+                        </h4>
+                        <button onClick={() => setShowGoogleMapModal(false)} className="text-slate-400 hover:text-slate-800 cursor-pointer">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      
+                      {/* Google Map real */}
+                      <div className="bg-slate-100 border border-slate-200 rounded-2xl h-80 overflow-hidden relative shadow-inner">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          allowFullScreen
+                          src={`https://maps.google.com/maps?q=${centroSeleccionadoInfo.latitud},${centroSeleccionadoInfo.longitud}&z=16&output=embed`}
+                        ></iframe>
+                      </div>
+
+                      <div className="text-[10px] text-slate-500 font-bold leading-relaxed bg-blue-50/50 p-3 rounded-xl border border-blue-100/50">
+                        <p><strong>Dirección:</strong> {centroSeleccionadoInfo.direccion}</p>
+                        <p className="mt-1"><strong>Líneas de Micros:</strong> {centroSeleccionadoInfo.como_llegar}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowGoogleMapModal(false)}
+                        className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-xs transition cursor-pointer shadow-md shadow-blue-100"
+                      >
+                        Entendido
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* MIS TURNOS Y IMPRESIÓN */}
                 <section className="space-y-4">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -1488,14 +1737,14 @@ function App() {
                     <div className="flex bg-slate-100 p-1 rounded-xl font-bold text-[10px] sm:text-xs">
                       <button
                         type="button"
-                        onClick={() => setPatientFilterTab('activas')}
+                        onClick={() => { setPatientFilterTab('activas'); setPatientPage(1); }}
                         className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${patientFilterTab === 'activas' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Activas ({turnos.filter(t => t.id_paciente === currentUser?.id_usuario && (t.estado === 'Pendiente' || t.estado === 'En Atención')).length})
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPatientFilterTab('historial')}
+                        onClick={() => { setPatientFilterTab('historial'); setPatientPage(1); }}
                         className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${patientFilterTab === 'historial' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                       >
                         Historial ({turnos.filter(t => t.id_paciente === currentUser?.id_usuario && (t.estado === 'Atendido' || t.estado === 'Cancelado' || t.estado === 'Ausente')).length})
@@ -1522,53 +1771,144 @@ function App() {
                         );
                       }
 
-                      return filteredPatientTurnos.map(turno => (
-                        <div key={turno.id_turno} className="bg-white border-2 border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-semibold">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h5 className="font-black text-slate-800 text-sm leading-none">{turno.nombre_centro}</h5>
-                              <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : turno.estado === 'Cancelado' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                                {turno.estado}
-                              </span>
-                            </div>
-                            <div className="flex gap-3 text-slate-500 font-bold text-[10px]">
-                              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-blue-500" /> {turno.fecha} ({turno.hora})</span>
-                              <span>Médico: {turno.nombre_personal_salud}</span>
-                            </div>
+                      // Paginación local del paciente (3 por página)
+                      const itemsPerPatientPage = 3;
+                      const totalPatientPages = Math.ceil(filteredPatientTurnos.length / itemsPerPatientPage) || 1;
+                      const currentPageAdjusted = Math.min(patientPage, totalPatientPages);
+                      const startIndex = (currentPageAdjusted - 1) * itemsPerPatientPage;
+                      const paginatedPatientTurnos = filteredPatientTurnos.slice(startIndex, startIndex + itemsPerPatientPage);
+
+                      return (
+                        <>
+                          <div className="space-y-3">
+                            {paginatedPatientTurnos.map(turno => {
+                              const isExpanded = expandedTurnoId === turno.id_turno;
+                              return (
+                                <div key={turno.id_turno} className="bg-white border-2 border-slate-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col gap-1 text-xs font-semibold">
+                                  {/* Encabezado colapsable */}
+                                  <div
+                                    onClick={() => setExpandedTurnoId(isExpanded ? '' : turno.id_turno)}
+                                    className="flex items-center justify-between w-full cursor-pointer select-none gap-3"
+                                  >
+                                    <div className="space-y-1.5 min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h5 className="font-black text-slate-800 text-xs sm:text-sm truncate leading-tight">{turno.nombre_centro}</h5>
+                                        <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : turno.estado === 'Cancelado' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                                          {turno.estado}
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-2.5 text-slate-500 font-bold text-[9px] sm:text-[10px]">
+                                        <span className="flex items-center gap-0.5"><Clock className="w-3.5 h-3.5 text-blue-500" /> {turno.fecha} ({turno.hora})</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1 rounded-xl text-[9px] sm:text-[10px] font-mono font-black">
+                                        #{turno.id_turno.substring(2, 8).toUpperCase()}
+                                      </span>
+                                      {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                    </div>
+                                  </div>
+
+                                  {/* Detalles expandidos */}
+                                  {isExpanded && (
+                                    <div className="border-t border-slate-100 pt-4 mt-3 space-y-4 animate-fadeIn">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] sm:text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                        <p><strong>Médico:</strong> {turno.nombre_personal_salud}</p>
+                                        <p><strong>Consultorio:</strong> <span className="text-blue-700 font-black">{obtenerConsultorio(turno.especialidad_personal_salud)}</span></p>
+                                        <p className="sm:col-span-2"><strong>Hospital:</strong> {turno.nombre_centro}</p>
+                                        <p className="sm:col-span-2"><strong>Código único:</strong> {turno.id_turno}</p>
+                                      </div>
+
+                                      <div className="flex flex-wrap gap-2 font-bold">
+                                        {turno.estado === 'Pendiente' && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => imprimirFicha(turno)}
+                                              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-[10px] sm:text-xs cursor-pointer"
+                                            >
+                                              <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCancelarTurno(turno)}
+                                              className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-[10px] sm:text-xs cursor-pointer"
+                                            >
+                                              <XCircle className="w-4 h-4 text-rose-500" /> Cancelar Ficha
+                                            </button>
+                                          </>
+                                        )}
+                                        {turno.estado === 'Atendido' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => imprimirFicha(turno)}
+                                            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-3 py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-[10px] sm:text-xs cursor-pointer"
+                                          >
+                                            <Printer className="w-4 h-4 text-slate-600" /> Reimprimir Comprobante
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {/* Monitor de Cola Virtual en Vivo */}
+                                      {turno.estado === 'Pendiente' && (() => {
+                                        const queue = calcularEsperaCola(turno, turnos);
+                                        return (
+                                          <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3.5 space-y-2 text-[10px] text-slate-700">
+                                            <div className="flex justify-between items-center">
+                                              <span className="font-black text-blue-800 flex items-center gap-1">
+                                                <Clock className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '4s' }} /> Monitor de Fila Virtual en Vivo
+                                              </span>
+                                              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-black text-[8px] animate-pulse">Fila Activa</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2 text-center pt-1 font-bold text-slate-600">
+                                              <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-2xs">
+                                                <p className="text-[8px] text-slate-400 uppercase">En Consulta</p>
+                                                <p className="text-xs text-blue-600 font-black">{queue.fichaEnConsulta}</p>
+                                              </div>
+                                              <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-2xs">
+                                                <p className="text-[8px] text-slate-400 uppercase">Pacientes delante</p>
+                                                <p className="text-xs text-amber-600 font-black">{queue.personasDelante}</p>
+                                              </div>
+                                              <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-2xs">
+                                                <p className="text-[8px] text-slate-400 uppercase">Tu posición</p>
+                                                <p className="text-xs text-emerald-600 font-black"># {queue.posicionFila}</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
 
-                          <div className="flex gap-2 w-full sm:w-auto shrink-0 font-bold">
-                            {turno.estado === 'Pendiente' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => imprimirFicha(turno)}
-                                  className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
-                                >
-                                  <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCancelarTurno(turno)}
-                                  className="w-full sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
-                                >
-                                  <XCircle className="w-4 h-4 text-rose-500" /> Cancelar Ficha
-                                </button>
-                              </>
-                            )}
-                            {turno.estado === 'Atendido' && (
+                          {/* Controles de paginación del Paciente */}
+                          {totalPatientPages > 1 && (
+                            <div className="flex justify-between items-center bg-white border-2 border-slate-200 rounded-2xl p-3 text-xs font-bold text-slate-700 shadow-xs">
                               <button
                                 type="button"
-                                onClick={() => imprimirFicha(turno)}
-                                className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs cursor-pointer"
+                                disabled={currentPageAdjusted === 1}
+                                onClick={() => setPatientPage(prev => Math.max(prev - 1, 1))}
+                                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
                               >
-                                <Printer className="w-4 h-4 text-slate-600" /> Reimprimir Comprobante
+                                &larr; Anterior
                               </button>
-                            )}
-                          </div>
-                        </div>
-                      ));
+                              <span>Página {currentPageAdjusted} de {totalPatientPages} ({filteredPatientTurnos.length} fichas)</span>
+                              <button
+                                type="button"
+                                disabled={currentPageAdjusted === totalPatientPages}
+                                onClick={() => setPatientPage(prev => Math.min(prev + 1, totalPatientPages))}
+                                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
+                              >
+                                Siguiente &rarr;
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      );
                     })()}
                   </div>
                 </section>
@@ -1993,18 +2333,32 @@ function App() {
                   {/* Crear Centros de Salud */}
                   <form onSubmit={handleCrearCentro} className="bg-white border-2 border-slate-200 rounded-3xl p-5 space-y-3 text-xs shadow-xs font-semibold">
                     <h4 className="font-extrabold text-slate-800 text-xs pb-1 border-b border-slate-100">Registrar Centro de Salud (Santa Cruz)</h4>
-                    <div>
-                      <label className="text-[10px] text-slate-500 font-bold">Nombre del Hospital</label>
-                      <input
-                        type="text"
-                        required
-                        value={nuevoCentroNombre}
-                        onChange={(e) => setNuevoCentroNombre(e.target.value)}
-                        placeholder="Ej: Hospital Municipal Francés"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
-                      />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Nombre del Hospital</label>
+                        <input
+                          type="text"
+                          required
+                          value={nuevoCentroNombre}
+                          onChange={(e) => setNuevoCentroNombre(e.target.value)}
+                          placeholder="Ej: Hospital Municipal Francés"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Dirección</label>
+                        <input
+                          type="text"
+                          value={nuevoCentroDir}
+                          onChange={(e) => setNuevoCentroDir(e.target.value)}
+                          placeholder="Ej: Av. Santos Dumont (6to Anillo)"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
+                        />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="text-[10px] text-slate-500 font-bold">Nivel</label>
                         <select
@@ -2017,19 +2371,83 @@ function App() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold">Dirección</label>
+                        <label className="text-[10px] text-slate-500 font-bold">Teléfono</label>
                         <input
                           type="text"
-                          value={nuevoCentroDir}
-                          onChange={(e) => setNuevoCentroDir(e.target.value)}
-                          placeholder="Ej: Av. Santos Dumont"
+                          value={nuevoCentroTelf}
+                          onChange={(e) => setNuevoCentroTelf(e.target.value)}
+                          placeholder="Ej: 356-9988"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Foto del Hospital (URL)</label>
+                        <input
+                          type="text"
+                          value={nuevoCentroImagenUrl}
+                          onChange={(e) => setNuevoCentroImagenUrl(e.target.value)}
+                          placeholder="https://images.unsplash.com/..."
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
                         />
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Coordenada X en Mapa (Latitud, 0-100 %)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={nuevoCentroLat}
+                          onChange={(e) => setNuevoCentroLat(e.target.value)}
+                          placeholder="Ej: 40"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold">Coordenada Y en Mapa (Longitud, 0-100 %)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={nuevoCentroLong}
+                          onChange={(e) => setNuevoCentroLong(e.target.value)}
+                          placeholder="Ej: 82"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                      <label className="text-[10px] text-slate-500 font-bold block pb-1">Especialidades Disponibles en este Centro</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {especialidades.map(esp => {
+                          const isChecked = nuevoCentroEspecialidades.includes(esp.id_especialidad);
+                          return (
+                            <label key={esp.id_especialidad} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border rounded-xl p-2 cursor-pointer transition select-none">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setNuevoCentroEspecialidades(nuevoCentroEspecialidades.filter(id => id !== esp.id_especialidad));
+                                  } else {
+                                    setNuevoCentroEspecialidades([...nuevoCentroEspecialidades, esp.id_especialidad]);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                              />
+                              <span className="font-bold text-[10px] text-slate-700 leading-tight">{esp.nombre}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl font-bold transition text-xs cursor-pointer"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold transition text-xs cursor-pointer shadow-xs mt-2"
                     >
                       Guardar Hospital
                     </button>
