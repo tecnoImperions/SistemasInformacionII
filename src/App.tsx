@@ -275,6 +275,104 @@ const calcularEsperaCola = (turnoActual: Turno, todosLosTurnos: Turno[]) => {
   };
 };
 
+const fetchConProxies = async (targetUrl: string, options: RequestInit): Promise<Response> => {
+  const isPost = options.method === 'POST';
+  const isSmtp = targetUrl.includes('smtpjs.com');
+  const isResend = targetUrl.includes('resend.com');
+
+  if (isPost && (isSmtp || isResend)) {
+    const localHosts = [
+      "http://localhost/medic/send_email.php",
+      "http://medic.test/send_email.php"
+    ];
+
+    let originalBody: any = {};
+    try {
+      originalBody = JSON.parse(options.body as string);
+    } catch {
+      // Ignorar si no es JSON parsesable
+    }
+
+    const localPayload = isSmtp 
+      ? { type: 'smtp', ...originalBody }
+      : { 
+          type: 'resend', 
+          apiKey: (options.headers as any)['Authorization']?.replace('Bearer ', ''),
+          ...originalBody 
+        };
+
+    for (const localUrl of localHosts) {
+      try {
+        console.log(`Intentando petición local a través de Laragon: ${localUrl}`);
+        const res = await fetch(localUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(localPayload)
+        });
+        if (res.ok) {
+          return res;
+        }
+      } catch (err) {
+        console.warn(`No se pudo conectar al PHP local en ${localUrl}:`, err);
+      }
+    }
+  }
+
+  // Fallback a proxies públicos si Laragon no está activo o falló
+  const proxyList = [
+    (url: string) => `https://corsproxy.org/?${url}`,
+    (url: string) => `https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`,
+    (url: string) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
+    (url: string) => `https://cors.x2u.in/${url}`,
+    (url: string) => url
+  ];
+
+  let lastError: any = null;
+
+  for (const getProxyUrl of proxyList) {
+    const finalUrl = getProxyUrl(targetUrl);
+    try {
+      console.log(`Intentando petición a proxy público: ${finalUrl}`);
+      const res = await fetch(finalUrl, options);
+      if (res.ok) {
+        return res;
+      }
+      throw new Error(`HTTP error ${res.status}`);
+    } catch (err) {
+      console.warn(`Proxy público falló para ${finalUrl}:`, err);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("Todos los proxies fallaron");
+};
+
+const enviarEmailSMTP = async (host: string, user: string, pass: string, to: string, from: string, subject: string, body: string): Promise<string> => {
+  const data = {
+    Host: host,
+    Username: user,
+    Password: pass,
+    To: to,
+    From: from,
+    Subject: subject,
+    Body: body,
+    Action: "Send",
+    nocache: Math.floor(1e6 * Math.random() + 1)
+  };
+
+  const res = await fetchConProxies("https://smtpjs.com/v1/smtp.aspx", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: JSON.stringify(data)
+  });
+
+  return res.text();
+};
+
 
 function App() {
   // --- ACCESIBILIDAD MÁXIMA POR DEFECTO (VISTA ENORME / PANTALLA GRANDE) ---
@@ -295,6 +393,11 @@ function App() {
     { id: '1', titulo: 'Sistema Activo', mensaje: 'TurnoYa está listo para regular las colas en los hospitales.', tipo: 'push', fecha: 'Hoy' }
   ]);
   const [showNotifPanel, setShowNotifPanel] = useState<boolean>(false);
+
+  // --- FILTROS DE EXPORTACIÓN ADMIN ---
+  const [adminFiltroCentroId, setAdminFiltroCentroId] = useState<string>('todos');
+  const [adminFiltroFechaDesde, setAdminFiltroFechaDesde] = useState<string>('');
+  const [adminFiltroFechaHasta, setAdminFiltroFechaHasta] = useState<string>('');
 
   // --- ALERTAS Y CONFIRMACIONES ESTILO SWAL ---
   const [swalAlert, setSwalAlert] = useState<{ show: boolean; titulo: string; mensaje: string; tipo: 'success' | 'error' | 'info' } | null>(null);
@@ -330,6 +433,14 @@ function App() {
   const [especialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
+
+  // Filtrado de turnos para reportes del Administrador (Hospital y rango de fechas)
+  const turnosFiltradosAdmin = turnos.filter(t => {
+    if (adminFiltroCentroId !== 'todos' && t.id_centro !== adminFiltroCentroId) return false;
+    if (adminFiltroFechaDesde && t.fecha < adminFiltroFechaDesde) return false;
+    if (adminFiltroFechaHasta && t.fecha > adminFiltroFechaHasta) return false;
+    return true;
+  });
 
   // --- FILTROS Y PAGINACIÓN DE VOLÚMENES MASIVOS ---
   const [patientFilterTab, setPatientFilterTab] = useState<'activas' | 'historial'>('activas');
@@ -877,52 +988,62 @@ function App() {
     `;
 
     if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-      if (typeof (window as any).Email !== "undefined") {
-        (window as any).Email.send({
-          Host: SMTP_HOST,
-          Username: SMTP_USER,
-          Password: SMTP_PASS,
-          To: currentUser.correo,
-          From: SMTP_FROM || SMTP_USER,
-          Subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
-          Body: mailHtml
-        }).then((message: string) => {
-          console.log("SMTPJS response:", message);
-          if (message.toLowerCase() !== "ok" && !message.includes("true")) {
-            triggerAlert("Detalle de Correo SMTP", `Error al enviar correo: ${message}. Verifique sus credenciales SMTP en el archivo .env`, "info");
-          }
-        }).catch((err: any) => {
-          console.error("Error al enviar email por SMTPJS:", err);
-        });
-      } else {
-        console.warn("SMTPJS library not loaded");
-      }
-    } else if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
-      fetch('https://corsproxy.io/?https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'onboarding@resend.dev',
-          to: [currentUser.correo],
-          subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
-          html: mailHtml
-        })
-      })
-      .then(async (res) => {
-        const data = await res.json();
-        console.log("Resend API response:", data);
-        if (!res.ok) {
-          triggerAlert(
-            'Detalle de Correo',
-            `Resend rechazó el envío: ${data.message || 'Error de Autenticación/Dominio'}. Verifique que el correo del paciente sea el mismo con el que se registró en Resend.`,
-            'info'
-          );
+      enviarEmailSMTP(
+        SMTP_HOST,
+        SMTP_USER,
+        SMTP_PASS,
+        currentUser.correo,
+        SMTP_FROM || SMTP_USER,
+        `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+        mailHtml
+      ).then((message: string) => {
+        console.log("SMTP response:", message);
+        if (message.toLowerCase() !== "ok" && !message.includes("true")) {
+          triggerAlert("Detalle de Correo SMTP", `Error al enviar correo: ${message}. Verifique sus credenciales SMTP en el archivo .env`, "info");
         }
+      }).catch((err: any) => {
+        console.error("Error al enviar email por SMTP:", err);
+      });
+    } else if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
+      // Enviar correo a través de la función RPC de Supabase (Cero CORS, seguro y estable en local y GitHub Pages)
+      supabase.rpc('enviar_email_resend', {
+        p_to: currentUser.correo,
+        p_subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+        p_html: mailHtml
       })
-      .catch(err => console.error("Error al enviar email por Resend:", err));
+      .then(({ data, error }) => {
+        console.log("Resend Supabase RPC response:", data, error);
+        if (error) {
+          console.warn("RPC enviar_email_resend no está creado, usando fallback de proxy público...", error);
+          
+          // Fallback a fetchConProxies si la función RPC no está creada en la base de datos
+          fetchConProxies('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${RESEND_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: 'onboarding@resend.dev',
+              to: [currentUser.correo],
+              subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+              html: mailHtml
+            })
+          })
+          .then(async (res) => {
+            const resData = await res.json();
+            console.log("Resend API fallback response:", resData);
+            if (!res.ok) {
+              triggerAlert(
+                'Detalle de Correo',
+                `Resend rechazó el envío: ${resData.message || 'Error de Autenticación/Dominio'}. Verifique que el correo del paciente sea el mismo con el que se registró en Resend.`,
+                'info'
+              );
+            }
+          })
+          .catch(err => console.error("Error en fallback de Resend:", err));
+        }
+      });
     }
 
     // Recargar horarios y turnos de Supabase
@@ -2555,7 +2676,7 @@ function App() {
 
                 {/* CONFIGURACIÓN DE REPORTES Y ESTADÍSTICAS (CU05 / HU11) */}
                 <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
-                  <div className="flex justify-between items-center border-b pb-2">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-2 gap-2">
                     <h4 className="font-extrabold text-slate-800 text-base flex items-center gap-1.5">
                       <BarChart3 className="w-5 h-5 text-indigo-600" /> Reportes Estadísticos de Fichas (CU05)
                     </h4>
@@ -2563,29 +2684,44 @@ function App() {
                       onClick={() => {
                         const reportWindow = window.open('', '_blank');
                         if (!reportWindow) return;
+                        
+                        const centroSeleccionado = centros.find(c => c.id_centro === adminFiltroCentroId);
+                        const hospitalNombre = centroSeleccionado ? centroSeleccionado.nombre : 'Todos los Hospitales';
+                        const rangoFechas = (adminFiltroFechaDesde || adminFiltroFechaHasta) 
+                          ? `Filtro de Fecha: ${adminFiltroFechaDesde || 'Inicio'} hasta ${adminFiltroFechaHasta || 'Fin'}`
+                          : 'Rango de Fecha: Histórico Completo';
+
                         reportWindow.document.write(`
                           <html>
                             <head>
                               <title>Reporte de Turnos - TurnoYa</title>
                               <style>
                                 body { font-family: sans-serif; padding: 40px; color: #334155; }
-                                h1 { color: #1e3a8a; }
+                                h1 { color: #1e3a8a; margin-bottom: 5px; }
+                                .meta { color: #64748b; font-size: 14px; margin-bottom: 20px; }
                                 table { width: 100%; border-collapse: collapse; margin-top: 20px; }
                                 th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
                                 th { background-color: #f8fafc; }
+                                .summary-box { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
                               </style>
                             </head>
                             <body>
                               <h1>TurnoYa - Reporte Estadístico</h1>
-                              <p>Fecha de generación: ${new Date().toLocaleString()}</p>
+                              <div class="meta">
+                                <p><strong>Hospital / Centro:</strong> ${hospitalNombre}</p>
+                                <p><strong>Periodo:</strong> ${rangoFechas}</p>
+                                <p>Fecha de generación: ${new Date().toLocaleString()}</p>
+                              </div>
                               <hr />
-                              <h3>Resumen de Fichas</h3>
-                              <p><strong>Total Fichas Solicitadas:</strong> ${turnos.length}</p>
-                              <p><strong>Atendidos (Atención Médica):</strong> ${turnos.filter(t => t.estado === 'Atendido').length}</p>
-                              <p><strong>Pendientes:</strong> ${turnos.filter(t => t.estado === 'Pendiente').length}</p>
-                              <p><strong>Cancelados:</strong> ${turnos.filter(t => t.estado === 'Cancelado').length}</p>
+                              <div class="summary-box">
+                                <h3>Resumen de Fichas Filtradas</h3>
+                                <p><strong>Total Fichas Solicitadas:</strong> ${turnosFiltradosAdmin.length}</p>
+                                <p><strong>Atendidos (Atención Médica):</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Atendido').length}</p>
+                                <p><strong>Pendientes:</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Pendiente').length}</p>
+                                <p><strong>Cancelados:</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Cancelado').length}</p>
+                              </div>
                               
-                              <h3>Fichas en Base de Datos</h3>
+                              <h3>Listado de Fichas (${turnosFiltradosAdmin.length})</h3>
                               <table>
                                 <thead>
                                   <tr>
@@ -2598,9 +2734,9 @@ function App() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  ${turnos.map(t => `
+                                  ${turnosFiltradosAdmin.map(t => `
                                     <tr>
-                                      <td>${t.id_turno.substring(0,8)}</td>
+                                      <td>${t.id_turno.substring(0,8).toUpperCase()}</td>
                                       <td>${t.nombre_paciente}</td>
                                       <td>${t.nombre_centro}</td>
                                       <td>${t.especialidad_personal_salud}</td>
@@ -2616,29 +2752,85 @@ function App() {
                         `);
                         reportWindow.document.close();
                       }}
-                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1 cursor-pointer border border-indigo-200"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1 cursor-pointer shadow-xs"
                     >
                       <Download className="w-4 h-4" /> Exportar Reporte (PDF/Imprimir)
                     </button>
+                  </div>
+
+                  {/* Panel de Filtros para Administrador */}
+                  <div className="bg-slate-50 border rounded-2xl p-4 space-y-3">
+                    <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Filtros de Búsqueda y Exportación</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase">Hospital / Centro</label>
+                        <select
+                          value={adminFiltroCentroId}
+                          onChange={(e) => setAdminFiltroCentroId(e.target.value)}
+                          className="w-full text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-2 outline-indigo-600 cursor-pointer"
+                        >
+                          <option value="todos">🏥 Todos los Hospitales</option>
+                          {centros.map(c => (
+                            <option key={c.id_centro} value={c.id_centro}>
+                              {c.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase">Fecha Desde</label>
+                        <input
+                          type="date"
+                          value={adminFiltroFechaDesde}
+                          onChange={(e) => setAdminFiltroFechaDesde(e.target.value)}
+                          className="w-full text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-2 outline-indigo-600"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase">Fecha Hasta</label>
+                        <input
+                          type="date"
+                          value={adminFiltroFechaHasta}
+                          onChange={(e) => setAdminFiltroFechaHasta(e.target.value)}
+                          className="w-full text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-2 outline-indigo-600"
+                        />
+                      </div>
+                    </div>
+                    {(adminFiltroCentroId !== 'todos' || adminFiltroFechaDesde || adminFiltroFechaHasta) && (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => {
+                            setAdminFiltroCentroId('todos');
+                            setAdminFiltroFechaDesde('');
+                            setAdminFiltroFechaHasta('');
+                          }}
+                          className="text-[10px] font-black text-rose-600 hover:underline cursor-pointer"
+                        >
+                          Limpiar filtros
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tarjetas de Métricas */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div className="bg-slate-50 border rounded-2xl p-4 text-center">
                       <p className="text-[10px] text-slate-500 font-extrabold uppercase">Total Solicitudes</p>
-                      <p className="text-2xl font-black text-slate-800">{turnos.length}</p>
+                      <p className="text-2xl font-black text-slate-800">{turnosFiltradosAdmin.length}</p>
                     </div>
                     <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
                       <p className="text-[10px] text-emerald-600 font-extrabold uppercase">Atendidos</p>
-                      <p className="text-2xl font-black text-emerald-800">{turnos.filter(t => t.estado === 'Atendido').length}</p>
+                      <p className="text-2xl font-black text-emerald-800">{turnosFiltradosAdmin.filter(t => t.estado === 'Atendido').length}</p>
                     </div>
                     <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
                       <p className="text-[10px] text-amber-600 font-extrabold uppercase">Pendientes</p>
-                      <p className="text-2xl font-black text-amber-800">{turnos.filter(t => t.estado === 'Pendiente').length}</p>
+                      <p className="text-2xl font-black text-amber-800">{turnosFiltradosAdmin.filter(t => t.estado === 'Pendiente').length}</p>
                     </div>
                     <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-center">
                       <p className="text-[10px] text-rose-600 font-extrabold uppercase">Cancelados</p>
-                      <p className="text-2xl font-black text-rose-800">{turnos.filter(t => t.estado === 'Cancelado').length}</p>
+                      <p className="text-2xl font-black text-rose-800">{turnosFiltradosAdmin.filter(t => t.estado === 'Cancelado').length}</p>
                     </div>
                   </div>
 
@@ -2647,8 +2839,8 @@ function App() {
                     <h5 className="font-extrabold text-slate-500 text-xs uppercase">Demanda por Especialidad</h5>
                     <div className="space-y-2.5">
                       {['Medicina General', 'Pediatría', 'Neurología', 'Cardiología'].map(esp => {
-                        const count = turnos.filter(t => t.especialidad_personal_salud === esp).length;
-                        const percentage = turnos.length > 0 ? (count / turnos.length) * 100 : 0;
+                        const count = turnosFiltradosAdmin.filter(t => t.especialidad_personal_salud === esp).length;
+                        const percentage = turnosFiltradosAdmin.length > 0 ? (count / turnosFiltradosAdmin.length) * 100 : 0;
                         return (
                           <div key={esp} className="space-y-1 text-xs font-semibold">
                             <div className="flex justify-between font-bold">
