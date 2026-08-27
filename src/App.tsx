@@ -33,6 +33,11 @@ import {
 // Coloca aquí tu API Key de Resend (ej: re_123456789...) para envío real de correos a Gmail
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
 
+// Configuración de EmailJS para envío libre de CORS a cualquier destinatario
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || "service_wvg76zs";
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "template_mepd51j";
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "TY1fOnOYxJ-IkOedP";
+
 
 
 // --- DEFINICIONES DE TIPOS ---
@@ -943,7 +948,37 @@ function App() {
       </div>
     `;
 
-    if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
+    if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
+      // Enviar correo a través de EmailJS (Permite enviar a CUALQUIER destinatario gratis sin dominio propio y sin CORS)
+      console.log("Intentando enviar correo de confirmación vía EmailJS...");
+      fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          service_id: EMAILJS_SERVICE_ID,
+          template_id: EMAILJS_TEMPLATE_ID,
+          user_id: EMAILJS_PUBLIC_KEY,
+          template_params: {
+            to_email: currentUser.correo,
+            subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+            message_html: mailHtml
+          }
+        })
+      })
+      .then(async (res) => {
+        if (res.ok) {
+          console.log("EmailJS enviado con éxito!");
+        } else {
+          const text = await res.text();
+          console.error("Fallo en el servicio de EmailJS:", text);
+        }
+      })
+      .catch((err) => {
+        console.error("Error de conexión con EmailJS:", err);
+      });
+    } else if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
       // Enviar correo a través de la función RPC de Supabase (Cero CORS, seguro y estable en local y GitHub Pages)
       supabase.rpc('enviar_email_resend', {
         p_to: currentUser.correo,
