@@ -35,7 +35,6 @@ const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
 
 // Configuración SMTP Personalizada (Ej: Gmail SMTP, Supabase SMTP, etc.)
 const SMTP_HOST = import.meta.env.VITE_SMTP_HOST || "";
-const SMTP_PORT = import.meta.env.VITE_SMTP_PORT || "587";
 const SMTP_USER = import.meta.env.VITE_SMTP_USER || "";
 const SMTP_PASS = import.meta.env.VITE_SMTP_PASS || "";
 const SMTP_FROM = import.meta.env.VITE_SMTP_FROM || "";
