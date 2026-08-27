@@ -18,42 +18,9 @@ if (!$input) {
     exit;
 }
 
-$type = $input['type'] ?? 'smtp'; // 'smtp' o 'resend'
+$type = $input['type'] ?? 'resend';
 
-if ($type === 'smtp') {
-    // Reenviar datos de SMTP a smtpjs.com mediante cURL (Cero restricciones CORS)
-    $smtpData = [
-        'Host' => $input['Host'] ?? '',
-        'Username' => $input['Username'] ?? '',
-        'Password' => $input['Password'] ?? '',
-        'To' => $input['To'] ?? '',
-        'From' => $input['From'] ?? '',
-        'Subject' => $input['Subject'] ?? '',
-        'Body' => $input['Body'] ?? '',
-        'Action' => 'Send',
-        'nocache' => rand(100000, 999999)
-    ];
-
-    $ch = curl_init('https://smtpjs.com/v1/smtp.aspx');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($smtpData));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/x-www-form-urlencoded'
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode === 200) {
-        echo $response; // Retorna la respuesta de SMTPJS ('OK' o mensaje de error)
-    } else {
-        echo "Error del servidor de correos (HTTP $httpCode)";
-    }
-    exit;
-} else if ($type === 'resend') {
-    // Reenviar datos a api.resend.com mediante cURL (Cero restricciones CORS)
+if ($type === 'resend') {
     $apiKey = $input['apiKey'] ?? '';
     $resendData = [
         'from' => $input['from'] ?? 'onboarding@resend.dev',

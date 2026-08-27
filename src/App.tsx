@@ -33,11 +33,7 @@ import {
 // Coloca aquí tu API Key de Resend (ej: re_123456789...) para envío real de correos a Gmail
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
 
-// Configuración SMTP Personalizada (Ej: Gmail SMTP, Supabase SMTP, etc.)
-const SMTP_HOST = import.meta.env.VITE_SMTP_HOST || "";
-const SMTP_USER = import.meta.env.VITE_SMTP_USER || "";
-const SMTP_PASS = import.meta.env.VITE_SMTP_PASS || "";
-const SMTP_FROM = import.meta.env.VITE_SMTP_FROM || "";
+
 
 // --- DEFINICIONES DE TIPOS ---
 interface CentroSalud {
@@ -277,10 +273,9 @@ const calcularEsperaCola = (turnoActual: Turno, todosLosTurnos: Turno[]) => {
 
 const fetchConProxies = async (targetUrl: string, options: RequestInit): Promise<Response> => {
   const isPost = options.method === 'POST';
-  const isSmtp = targetUrl.includes('smtpjs.com');
   const isResend = targetUrl.includes('resend.com');
 
-  if (isPost && (isSmtp || isResend)) {
+  if (isPost && isResend) {
     const localHosts = [
       "http://localhost/medic/send_email.php",
       "http://medic.test/send_email.php"
@@ -293,13 +288,11 @@ const fetchConProxies = async (targetUrl: string, options: RequestInit): Promise
       // Ignorar si no es JSON parsesable
     }
 
-    const localPayload = isSmtp 
-      ? { type: 'smtp', ...originalBody }
-      : { 
-          type: 'resend', 
-          apiKey: (options.headers as any)['Authorization']?.replace('Bearer ', ''),
-          ...originalBody 
-        };
+    const localPayload = { 
+      type: 'resend', 
+      apiKey: (options.headers as any)['Authorization']?.replace('Bearer ', ''),
+      ...originalBody 
+    };
 
     for (const localUrl of localHosts) {
       try {
@@ -320,58 +313,21 @@ const fetchConProxies = async (targetUrl: string, options: RequestInit): Promise
     }
   }
 
-  // Fallback a proxies públicos si Laragon no está activo o falló
-  const proxyList = [
-    (url: string) => `https://corsproxy.org/?${url}`,
-    (url: string) => `https://proxy.corsfix.com/?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://api.cors.lol/?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://cors.x2u.in/${url}`,
-    (url: string) => url
-  ];
-
-  let lastError: any = null;
-
-  for (const getProxyUrl of proxyList) {
-    const finalUrl = getProxyUrl(targetUrl);
-    try {
-      console.log(`Intentando petición a proxy público: ${finalUrl}`);
-      const res = await fetch(finalUrl, options);
+  // Fallback a proxy directo si Laragon no está activo o falló
+  try {
+      console.log(`Intentando petición a: ${targetUrl}`);
+      const res = await fetch(targetUrl, options);
       if (res.ok) {
         return res;
       }
       throw new Error(`HTTP error ${res.status}`);
-    } catch (err) {
-      console.warn(`Proxy público falló para ${finalUrl}:`, err);
-      lastError = err;
-    }
+  } catch (err) {
+      console.warn(`Petición falló para ${targetUrl}:`, err);
+      throw err;
   }
-
-  throw lastError || new Error("Todos los proxies fallaron");
 };
 
-const enviarEmailSMTP = async (host: string, user: string, pass: string, to: string, from: string, subject: string, body: string): Promise<string> => {
-  const data = {
-    Host: host,
-    Username: user,
-    Password: pass,
-    To: to,
-    From: from,
-    Subject: subject,
-    Body: body,
-    Action: "Send",
-    nocache: Math.floor(1e6 * Math.random() + 1)
-  };
 
-  const res = await fetchConProxies("https://smtpjs.com/v1/smtp.aspx", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: JSON.stringify(data)
-  });
-
-  return res.text();
-};
 
 
 function App() {
@@ -987,24 +943,7 @@ function App() {
       </div>
     `;
 
-    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-      enviarEmailSMTP(
-        SMTP_HOST,
-        SMTP_USER,
-        SMTP_PASS,
-        currentUser.correo,
-        SMTP_FROM || SMTP_USER,
-        `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
-        mailHtml
-      ).then((message: string) => {
-        console.log("SMTP response:", message);
-        if (message.toLowerCase() !== "ok" && !message.includes("true")) {
-          triggerAlert("Detalle de Correo SMTP", `Error al enviar correo: ${message}. Verifique sus credenciales SMTP en el archivo .env`, "info");
-        }
-      }).catch((err: any) => {
-        console.error("Error al enviar email por SMTP:", err);
-      });
-    } else if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
+    if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
       // Enviar correo a través de la función RPC de Supabase (Cero CORS, seguro y estable en local y GitHub Pages)
       supabase.rpc('enviar_email_resend', {
         p_to: currentUser.correo,
