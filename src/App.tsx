@@ -33,6 +33,13 @@ import {
 // Coloca aquí tu API Key de Resend (ej: re_123456789...) para envío real de correos a Gmail
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY || "";
 
+// Configuración SMTP Personalizada (Ej: Gmail SMTP, Supabase SMTP, etc.)
+const SMTP_HOST = import.meta.env.VITE_SMTP_HOST || "";
+const SMTP_PORT = import.meta.env.VITE_SMTP_PORT || "587";
+const SMTP_USER = import.meta.env.VITE_SMTP_USER || "";
+const SMTP_PASS = import.meta.env.VITE_SMTP_PASS || "";
+const SMTP_FROM = import.meta.env.VITE_SMTP_FROM || "";
+
 // --- DEFINICIONES DE TIPOS ---
 interface CentroSalud {
   id_centro: string;
@@ -613,6 +620,60 @@ function App() {
     return () => subscription.unsubscribe();
   }, [rememberMe]);
 
+  // --- CONTROLADOR DEL ESCÁNER DE CÁMARA REAL EN VENTANILLA ---
+  useEffect(() => {
+    let html5QrCode: any = null;
+
+    if (mostrarEscaneoSimulado) {
+      const timer = setTimeout(() => {
+        const qrContainer = document.getElementById('qr-reader');
+        if (!qrContainer) return;
+
+        try {
+          if (typeof (window as any).Html5Qrcode !== "undefined") {
+            html5QrCode = new (window as any).Html5Qrcode("qr-reader");
+            
+            const qrCodeSuccessCallback = (decodedText: string) => {
+              html5QrCode.stop().then(() => {
+                handleSimularEscaneo(decodedText);
+                setMostrarEscaneoSimulado(false);
+                triggerAlert("Escaneo Exitoso", `Ficha identificada y cargada correctamente para la C.I.: ${decodedText}`, "success");
+              }).catch((err: any) => {
+                console.error("Error al apagar la cámara:", err);
+              });
+            };
+
+            const config = { fps: 15, qrbox: { width: 220, height: 220 } };
+
+            html5QrCode.start(
+              { facingMode: "environment" },
+              config,
+              qrCodeSuccessCallback,
+              () => {}
+            ).catch((err: any) => {
+              console.error("Error al iniciar lector de cámara:", err);
+            });
+          }
+        } catch (e) {
+          console.error("Error al instanciar html5-qrcode:", e);
+        }
+      }, 300);
+
+      return () => {
+        clearTimeout(timer);
+        if (html5QrCode) {
+          try {
+            if (html5QrCode.isScanning) {
+              html5QrCode.stop().catch((e: any) => console.warn(e));
+            }
+          } catch (e) {
+            console.warn("Limpia de escáner cancelada:", e);
+          }
+        }
+      };
+    }
+  }, [mostrarEscaneoSimulado]);
+
   // --- ACCESOS RÁPIDOS DE PRUEBA (DESDE DEMO BAR) ---
   const handleBypass = (role: 'paciente' | 'encargado' | 'admin') => {
     const demoUsers: Record<string, Usuario> = {
@@ -782,11 +843,62 @@ function App() {
     };
     setNotificaciones([nuevaNotif, ...notificaciones]);
 
-    // Enviar correo SMTP real usando la API de Resend
-    if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
-      const centroObj = centros.find(c => c.id_centro === selectedCentroId);
-      const espObj = especialidadesSantaCruz.find(e => e.id_especialidad === selectedEspecialidadId);
-      
+    // Enviar correo SMTP real usando SMTPJS o la API de Resend
+    const centroObj = centros.find(c => c.id_centro === selectedCentroId);
+    const espObj = especialidadesSantaCruz.find(e => e.id_especialidad === selectedEspecialidadId);
+    const mailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+        <h2 style="color: #2563eb; margin-top: 0; font-size: 22px; font-weight: 800; border-bottom: 2px solid #eff6ff; padding-bottom: 10px;">TurnoYa - Confirmación</h2>
+        <p>Estimado(a) <strong>${currentUser.nombre}</strong>,</p>
+        <p>Su ficha médica ha sido reservada con éxito en la base de datos de nuestro sistema.</p>
+        
+        <div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; border-radius: 12px; margin: 20px 0;">
+          <p style="margin: 5px 0;"><strong>Código de Cita:</strong> #${idCita.substring(2, 8).toUpperCase()}</p>
+          <p style="margin: 5px 0;"><strong>Hospital / Centro:</strong> ${centroObj ? centroObj.nombre : 'Hospital Seleccionado'}</p>
+          <p style="margin: 5px 0;"><strong>Especialidad:</strong> ${espObj ? espObj.nombre : 'Medicina General'}</p>
+          <p style="margin: 5px 0;"><strong>Consultorio:</strong> ${obtenerConsultorio(espObj ? espObj.nombre : '')}</p>
+          <p style="margin: 5px 0;"><strong>Fecha y Hora:</strong> ${selectedHorarioObj.fecha} a las ${selectedHorarioObj.hora_inicio}</p>
+        </div>
+
+        <div style="margin: 20px 0; background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 12px; font-size: 13px; color: #1e3a8a;">
+          <strong style="display: block; margin-bottom: 5px;">Documentos obligatorios para presentarse:</strong>
+          <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+            <li>Cédula de Identidad original vigente.</li>
+            <li>Fotocopia legible de la Cédula de Identidad.</li>
+            ${(centroObj?.nivel_atencion === 3) 
+              ? '<li style="font-weight: bold; color: #b91c1c;">Formulario de Referencia D7 (Obligatorio para Tercer Nivel)</li>' 
+              : ''}
+          </ul>
+        </div>
+        
+        <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 0;">
+          <strong>Importante:</strong> No madrugue. Al contar con su ficha registrada, su cupo está garantizado. Preséntese en el hospital exactamente 15 minutos antes de su cita.
+        </p>
+      </div>
+    `;
+
+    if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+      if (typeof (window as any).Email !== "undefined") {
+        (window as any).Email.send({
+          Host: SMTP_HOST,
+          Username: SMTP_USER,
+          Password: SMTP_PASS,
+          To: currentUser.correo,
+          From: SMTP_FROM || SMTP_USER,
+          Subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
+          Body: mailHtml
+        }).then((message: string) => {
+          console.log("SMTPJS response:", message);
+          if (message.toLowerCase() !== "ok" && !message.includes("true")) {
+            triggerAlert("Detalle de Correo SMTP", `Error al enviar correo: ${message}. Verifique sus credenciales SMTP en el archivo .env`, "info");
+          }
+        }).catch((err: any) => {
+          console.error("Error al enviar email por SMTPJS:", err);
+        });
+      } else {
+        console.warn("SMTPJS library not loaded");
+      }
+    } else if (RESEND_API_KEY && RESEND_API_KEY !== "re_tu_api_key_aqui") {
       fetch('https://corsproxy.io/?https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -797,36 +909,7 @@ function App() {
           from: 'onboarding@resend.dev',
           to: [currentUser.correo],
           subject: `Ficha Médica Confirmada #${idCita.substring(2, 8).toUpperCase()} - TurnoYa`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-              <h2 style="color: #2563eb; margin-top: 0; font-size: 22px; font-weight: 800; border-bottom: 2px solid #eff6ff; padding-bottom: 10px;">TurnoYa - Confirmación</h2>
-              <p>Estimado(a) <strong>${currentUser.nombre}</strong>,</p>
-              <p>Su ficha médica ha sido reservada con éxito en la base de datos de nuestro sistema.</p>
-              
-              <div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; border-radius: 12px; margin: 20px 0;">
-                <p style="margin: 5px 0;"><strong>Código de Cita:</strong> #${idCita.substring(2, 8).toUpperCase()}</p>
-                <p style="margin: 5px 0;"><strong>Hospital / Centro:</strong> ${centroObj ? centroObj.nombre : 'Hospital Seleccionado'}</p>
-                <p style="margin: 5px 0;"><strong>Especialidad:</strong> ${espObj ? espObj.nombre : 'Medicina General'}</p>
-                <p style="margin: 5px 0;"><strong>Consultorio:</strong> ${obtenerConsultorio(espObj ? espObj.nombre : '')}</p>
-                <p style="margin: 5px 0;"><strong>Fecha y Hora:</strong> ${selectedHorarioObj.fecha} a las ${selectedHorarioObj.hora_inicio}</p>
-              </div>
-
-              <div style="margin: 20px 0; background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 12px; font-size: 13px; color: #1e3a8a;">
-                <strong style="display: block; margin-bottom: 5px;">Documentos obligatorios para presentarse:</strong>
-                <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
-                  <li>Cédula de Identidad original vigente.</li>
-                  <li>Fotocopia legible de la Cédula de Identidad.</li>
-                  ${(centroObj?.nivel_atencion === 3) 
-                    ? '<li style="font-weight: bold; color: #b91c1c;">Formulario de Referencia D7 (Obligatorio para Tercer Nivel)</li>' 
-                    : ''}
-                </ul>
-              </div>
-              
-              <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 0;">
-                <strong>Importante:</strong> No madrugue. Al contar con su ficha registrada, su cupo está garantizado. Preséntese en el hospital exactamente 15 minutos antes de su cita.
-              </p>
-            </div>
-          `
+          html: mailHtml
         })
       })
       .then(async (res) => {
@@ -1935,94 +2018,112 @@ function App() {
                   </button>
                 </div>
 
-                {/* MODAL ESCANEO SIMULADO */}
+                {/* INTERFAZ DE ESCANEO DE CÁMARA REAL EN TIEMPO REAL */}
                 {mostrarEscaneoSimulado && (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-                    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-5 space-y-4 border">
-                      <div className="flex justify-between items-center border-b pb-2">
-                        <h4 className="font-black text-slate-800 text-sm flex items-center gap-1">
-                          <QrCode className="w-5 h-5 text-indigo-600" /> Escanear Ficha Paciente
-                        </h4>
-                        <button onClick={() => setMostrarEscaneoSimulado(false)} className="text-slate-400 hover:text-slate-800">
-                          <X className="w-5 h-5" />
-                        </button>
+                  <div className="fixed inset-0 bg-slate-950/95 z-50 flex flex-col justify-between p-6 animate-fadeIn text-white font-sans">
+                    <style>{`
+                      @keyframes scanSweep {
+                        0% { top: 4%; }
+                        50% { top: 96%; }
+                        100% { top: 4%; }
+                      }
+                    `}</style>
+
+                    {/* Header */}
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-4 w-full max-w-md mx-auto shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <QrCode className="w-6 h-6 text-indigo-400 animate-pulse" />
+                        <div>
+                          <h4 className="font-black text-sm text-slate-100">Escáner de Fichas en Vivo</h4>
+                          <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">Cámara y Simulación Activas</p>
+                        </div>
                       </div>
-                      <div className="space-y-4 text-left">
-                        <style>{`
-                          @keyframes scanSweep {
-                            0% { top: 4%; }
-                            50% { top: 96%; }
-                            100% { top: 4%; }
-                          }
-                        `}</style>
-                        <div className="relative h-44 bg-slate-950 rounded-2xl flex flex-col items-center justify-center overflow-hidden border border-slate-800">
-                          {/* LASER SCANNING LINE */}
-                          <div 
-                            className="absolute left-[4%] right-[4%] h-0.5 bg-emerald-400 shadow-[0_0_10px_#34d399] z-10"
-                            style={{ animation: 'scanSweep 2.5s infinite ease-in-out' }}
-                          ></div>
-                          {/* SCANNER VIEWPORT CORNER BORDERS */}
-                          <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-emerald-400"></div>
-                          <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-emerald-400"></div>
-                          <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-emerald-400"></div>
-                          <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-emerald-400"></div>
-                          
-                          {/* QR ICON BACKGROUND */}
-                          <QrCode className="w-16 h-16 text-slate-800 animate-pulse" />
-                          <span className="text-[9px] text-emerald-400 font-mono mt-2 uppercase tracking-widest animate-pulse">Lente de Escaneo Activo</span>
-                        </div>
+                      <button
+                        onClick={() => setMostrarEscaneoSimulado(false)}
+                        className="bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-full border border-slate-800 cursor-pointer transition"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
 
-                        <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">Simular código QR detectado en cámara</label>
-                          {turnos.filter(t => t.estado === 'Pendiente').length > 0 ? (
-                            <select
-                              onChange={(e) => {
-                                setCiEscaneada(e.target.value);
-                              }}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-700 outline-none cursor-pointer"
-                              value={ciEscaneada}
-                            >
-                              <option value="">-- Seleccione una ficha detectada --</option>
-                              {turnos.filter(t => t.estado === 'Pendiente').map(t => (
-                                <option key={t.id_turno} value={t.ci_paciente}>
-                                  Ficha #${t.id_turno.substring(2,8).toUpperCase()} - C.I. {t.ci_paciente} ({t.nombre_paciente})
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <p className="text-[10px] text-slate-400 italic">No hay fichas pendientes de pacientes en la base de datos de Supabase.</p>
-                          )}
-                        </div>
+                    {/* Camera view / scanner square */}
+                    <div className="flex-1 flex flex-col items-center justify-center py-4 w-full max-w-md mx-auto">
+                      <div className="w-full aspect-square relative bg-black rounded-3xl overflow-hidden border-2 border-indigo-500 shadow-2xl">
+                        {/* LASER SCANNING LINE */}
+                        <div 
+                          className="absolute left-[4%] right-[4%] h-0.5 bg-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.8)] z-10"
+                          style={{ animation: 'scanSweep 2.5s infinite ease-in-out' }}
+                        ></div>
+                        {/* SCANNER VIEWPORT CORNER BORDERS */}
+                        <div className="absolute top-6 left-6 w-6 h-6 border-t-4 border-l-4 border-indigo-400 z-10"></div>
+                        <div className="absolute top-6 right-6 w-6 h-6 border-t-4 border-r-4 border-indigo-400 z-10"></div>
+                        <div className="absolute bottom-6 left-6 w-6 h-6 border-b-4 border-l-4 border-indigo-400 z-10"></div>
+                        <div className="absolute bottom-6 right-6 w-6 h-6 border-b-4 border-r-4 border-indigo-400 z-10"></div>
+                        
+                        {/* QR reader wrapper target */}
+                        <div id="qr-reader" className="w-full h-full object-cover"></div>
+                      </div>
+                      <p className="text-center text-xs text-slate-400 font-bold mt-4">
+                        Apunte la cámara trasera hacia el código QR de la boleta de atención del paciente.
+                      </p>
+                    </div>
 
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2">
-                          <p className="text-[10px] text-slate-500 font-medium">O ingrese la C.I. manualmente si es una ficha física:</p>
+                    {/* Footer con entrada manual y simulador */}
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 max-w-md mx-auto w-full shadow-lg shrink-0 text-slate-300">
+                      {/* Simular en caso de que no tenga cámara física */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-400 font-black uppercase tracking-wider block text-center">
+                          Simular Ficha Detectada (Pruebas en PC)
+                        </label>
+                        {turnos.filter(t => t.estado === 'Pendiente').length > 0 ? (
+                          <select
+                            onChange={(e) => {
+                              setCiEscaneada(e.target.value);
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white outline-none cursor-pointer"
+                            value={ciEscaneada}
+                          >
+                            <option value="">-- Seleccionar ficha pendiente --</option>
+                            {turnos.filter(t => t.estado === 'Pendiente').map(t => (
+                              <option key={t.id_turno} value={t.ci_paciente} className="bg-slate-900 text-white">
+                                Ficha #{t.id_turno.substring(2,8).toUpperCase()} - C.I. {t.ci_paciente} ({t.nombre_paciente})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-[10px] text-slate-500 italic text-center">No hay fichas pendientes en base de datos.</p>
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-800/80 my-2"></div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] text-slate-400 font-black uppercase tracking-wider block text-center">
+                          O Ingrese la C.I. manualmente
+                        </label>
+                        <div className="flex gap-2">
                           <input
                             type="text"
                             value={ciEscaneada}
                             onChange={(e) => setCiEscaneada(e.target.value)}
                             placeholder="Ej: 7766554"
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-center text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center text-sm font-bold text-white outline-none focus:ring-2 focus:ring-indigo-500"
                           />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!ciEscaneada.trim()) {
+                                triggerAlert("Error", "Por favor ingrese una C.I. válida o seleccione una ficha de simulación", "error");
+                                return;
+                              }
+                              handleSimularEscaneo(ciEscaneada);
+                              setMostrarEscaneoSimulado(false);
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-2xl font-bold text-xs cursor-pointer shadow-md transition"
+                          >
+                            Procesar
+                          </button>
                         </div>
-                      </div>
-                      <div className="flex gap-2 font-bold text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setMostrarEscaneoSimulado(false)}
-                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleSimularEscaneo(ciEscaneada);
-                            setMostrarEscaneoSimulado(false);
-                          }}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl cursor-pointer"
-                        >
-                          Confirmar Escaneo
-                        </button>
                       </div>
                     </div>
                   </div>
