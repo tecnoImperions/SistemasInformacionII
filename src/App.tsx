@@ -996,6 +996,7 @@ function App() {
       if (insertError) {
         triggerAlert('Error al Reservar', `Error: ${insertError.message}`, 'error');
         return;
+      }
       if (data && data[0]) {
         idCita = data[0].id_turno;
       }
@@ -1487,7 +1488,7 @@ function App() {
             {/* BRAND / LOGO */}
             <div className="flex items-center gap-2.5">
               <img
-                src="logo.jpg"
+                src="logo.png"
                 alt="Logo"
                 className="h-10 w-10 sm:h-12 sm:w-12 object-contain rounded-xl border border-slate-200 p-0.5"
                 onError={(e) => {
