@@ -1273,8 +1273,8 @@ function App() {
     const isMock = selectedTurnoAtencion.id_turno.startsWith('t-demo') || selectedTurnoAtencion.id_turno.startsWith('t-');
 
     if (!isMock) {
-      // 1. Guardar registro en atenciones
-      const { error: errorAtencion } = await supabase.from('atenciones').insert([{
+      // 1. Guardar o actualizar registro en atenciones (usando upsert para prevenir conflictos de clave única)
+      const { error: errorAtencion } = await supabase.from('atenciones').upsert([{
         id_turno: selectedTurnoAtencion.id_turno,
         diagnostico: atencionDiagnostico,
         observaciones: atencionObservaciones,

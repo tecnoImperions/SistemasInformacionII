@@ -259,7 +259,7 @@ create policy "Usuarios pueden modificar turnos autorizados"
   on public.turnos for update using (
     auth.uid() = id_paciente or 
     auth.uid() = id_personal_salud or 
-    public.get_user_role() = 'admin'
+    public.get_user_role() in ('admin', 'encargado')
   );
 
 -- 6. Políticas para ATENCIONES
