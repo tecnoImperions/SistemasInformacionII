@@ -204,6 +204,11 @@ create policy "Administradores pueden gestionar especialidades"
 create policy "Perfiles visibles públicamente" 
   on public.usuarios for select using (true);
 
+create policy "Permitir inserción de perfil propio" 
+  on public.usuarios for insert with check (
+    auth.uid() = id_usuario
+  );
+
 create policy "Usuarios pueden actualizar sus propios datos" 
   on public.usuarios for update using (
     auth.uid() = id_usuario or (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')

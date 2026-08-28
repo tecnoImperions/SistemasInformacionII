@@ -673,6 +673,21 @@ function App() {
             telefono: session.user.user_metadata?.telefono || '',
             rol: 'paciente'
           };
+
+          // Failsafe: intentar auto-crear perfil en tabla public.usuarios
+          supabase.from('usuarios').insert([{
+            id_usuario: tempUser.id_usuario,
+            ci: tempUser.ci || '00000000',
+            nombre: tempUser.nombre,
+            apellido: tempUser.apellido,
+            correo: tempUser.correo,
+            telefono: tempUser.telefono,
+            rol: tempUser.rol
+          }]).then(({ error }) => {
+            if (error) console.error("Fallo al auto-crear perfil en checkSession:", error);
+            else console.log("Perfil auto-creado con éxito en checkSession!");
+          });
+
           setCurrentUser(tempUser);
           setIsLoggedIn(true);
           window.location.hash = '#paciente';
@@ -696,6 +711,24 @@ function App() {
           .eq('id_usuario', session.user.id)
           .single();
 
+        // Failsafe: Si no está registrado en la base de datos pública, intentar auto-crearlo
+        if (!userRecord) {
+          const tempUser = {
+            id_usuario: session.user.id,
+            ci: session.user.user_metadata?.ci || '00000000',
+            nombre: session.user.user_metadata?.nombre || 'Paciente Nuevo',
+            apellido: session.user.user_metadata?.apellido || '',
+            correo: session.user.email || '',
+            telefono: session.user.user_metadata?.telefono || '',
+            rol: 'paciente'
+          };
+
+          supabase.from('usuarios').insert([tempUser]).then(({ error }) => {
+            if (error) console.error("Fallo al auto-crear perfil en onAuthStateChange:", error);
+            else console.log("Perfil auto-creado con éxito en onAuthStateChange!");
+          });
+        }
+
         const resolvedUser: Usuario = userRecord ? {
           id_usuario: userRecord.id_usuario,
           ci: userRecord.ci || '',
@@ -708,7 +741,7 @@ function App() {
           id_especialidad: userRecord.id_especialidad
         } : {
           id_usuario: session.user.id,
-          ci: session.user.user_metadata?.ci || '',
+          ci: session.user.user_metadata?.ci || '00000000',
           nombre: session.user.user_metadata?.nombre || 'Paciente Nuevo',
           apellido: session.user.user_metadata?.apellido || '',
           correo: session.user.email || '',
