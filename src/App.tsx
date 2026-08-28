@@ -427,6 +427,9 @@ function App() {
   const [mostrarEscaneoSimulado, setMostrarEscaneoSimulado] = useState<boolean>(false);
   const [ciEscaneada, setCiEscaneada] = useState<string>('');
 
+  // --- PRINT TARGET FOR MEDIA PRINT ---
+  const [printTarget, setPrintTarget] = useState<{ type: 'ticket', data: Turno } | { type: 'report', data: { turnos: Turno[], hospital: string, rango: string } } | null>(null);
+
   // --- ADMINISTRADOR (ADMIN) - HORARIOS ---
   const [nuevoHorarioCentro, setNuevoHorarioCentro] = useState<string>('c-1');
   const [nuevoHorarioFecha, setNuevoHorarioFecha] = useState<string>('2026-08-22');
@@ -634,6 +637,17 @@ function App() {
     fetchHorarios();
   }, [selectedCentroId]);
 
+  // Disparador de impresión nativo al seleccionar un target
+  useEffect(() => {
+    if (printTarget) {
+      const timer = setTimeout(() => {
+        window.print();
+        setPrintTarget(null);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [printTarget]);
+
   // Cargar sesión y escuchar cambios en Supabase Auth
   useEffect(() => {
     const checkSession = async () => {
@@ -794,7 +808,7 @@ function App() {
 
   // --- CONTROLADOR DEL ESCÁNER DE CÁMARA REAL EN VENTANILLA ---
   useEffect(() => {
-    let html5QrCode: any = null;
+    let html5QrCodeScanner: any = null;
 
     if (mostrarEscaneoSimulado) {
       const timer = setTimeout(() => {
@@ -802,42 +816,41 @@ function App() {
         if (!qrContainer) return;
 
         try {
-          if (typeof (window as any).Html5Qrcode !== "undefined") {
-            html5QrCode = new (window as any).Html5Qrcode("qr-reader");
+          if (typeof (window as any).Html5QrcodeScanner !== "undefined") {
+            html5QrCodeScanner = new (window as any).Html5QrcodeScanner(
+              "qr-reader",
+              { 
+                fps: 10, 
+                qrbox: { width: 220, height: 220 },
+                rememberLastUsedCamera: true,
+                supportedScanTypes: [0, 1] // Permitir cámara y archivos locales para máxima compatibilidad
+              },
+              /* verbose= */ false
+            );
             
             const qrCodeSuccessCallback = (decodedText: string) => {
-              html5QrCode.stop().then(() => {
-                handleSimularEscaneo(decodedText);
+              html5QrCodeScanner.clear().then(() => {
+                handleProcesarFichaPorTexto(decodedText);
                 setMostrarEscaneoSimulado(false);
-                triggerAlert("Escaneo Exitoso", `Ficha identificada y cargada correctamente para la C.I.: ${decodedText}`, "success");
               }).catch((err: any) => {
-                console.error("Error al apagar la cámara:", err);
+                console.error("Error al limpiar escáner:", err);
+                handleProcesarFichaPorTexto(decodedText);
+                setMostrarEscaneoSimulado(false);
               });
             };
-
-            const config = { fps: 15, qrbox: { width: 220, height: 220 } };
-
-            html5QrCode.start(
-              { facingMode: "environment" },
-              config,
-              qrCodeSuccessCallback,
-              () => {}
-            ).catch((err: any) => {
-              console.error("Error al iniciar lector de cámara:", err);
-            });
+            
+            html5QrCodeScanner.render(qrCodeSuccessCallback, (error: any) => {});
           }
         } catch (e) {
-          console.error("Error al instanciar html5-qrcode:", e);
+          console.error("Error al instanciar html5-qrcode scanner:", e);
         }
       }, 300);
 
       return () => {
         clearTimeout(timer);
-        if (html5QrCode) {
+        if (html5QrCodeScanner) {
           try {
-            if (html5QrCode.isScanning) {
-              html5QrCode.stop().catch((e: any) => console.warn(e));
-            }
+            html5QrCodeScanner.clear().catch((e: any) => console.warn(e));
           } catch (e) {
             console.warn("Limpia de escáner cancelada:", e);
           }
@@ -915,66 +928,7 @@ function App() {
 
   // --- IMPRESIÓN ---
   const imprimirFicha = (turno: Turno) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Ficha Médica #${turno.id_turno.substring(0, 6)}</title>
-          <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; text-align: center; color: #334155; }
-            .ticket { border: 3px dashed #475569; padding: 30px; display: inline-block; border-radius: 24px; max-width: 380px; background: #f8fafc; }
-            h2 { color: #2563eb; margin: 0 0 10px 0; font-size: 24px; font-weight: 900; }
-            .code { font-size: 32px; font-weight: 900; margin: 20px 0; color: #1e293b; background: #e2e8f0; padding: 12px; border-radius: 12px; letter-spacing: 2px; }
-            .details { text-align: left; font-size: 15px; line-height: 1.6; }
-            .details p { margin: 8px 0; }
-            .footer { font-size: 11px; color: #64748b; border-top: 1px solid #cbd5e1; margin-top: 20px; padding-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="ticket">
-            <h2>TurnoYa</h2>
-            <p style="font-size:13px; font-weight:extrabold; color: #475569; margin: 0; letter-spacing:1px;">FICHA CONFIRMADA</p>
-            <div class="code">#${turno.id_turno.substring(2, 8).toUpperCase()}</div>
-            
-            <!-- Código QR Real Generado con la C.I. del Paciente -->
-            <img 
-              src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${turno.ci_paciente}" 
-              alt="Código QR de Ficha" 
-              style="margin: 15px auto; display: block; width: 120px; height: 120px; border: 1px solid #cbd5e1; padding: 4px; background: white; border-radius: 8px;" 
-            />
-
-            <div class="details">
-              <p><strong>Paciente:</strong> ${turno.nombre_paciente}</p>
-              <p><strong>C.I. del Paciente:</strong> ${turno.ci_paciente}</p>
-              <p><strong>Hospital:</strong> ${turno.nombre_centro}</p>
-              <p><strong>Especialidad:</strong> ${turno.especialidad_personal_salud}</p>
-              <p><strong>Consultorio:</strong> ${obtenerConsultorio(turno.especialidad_personal_salud)}</p>
-              <p><strong>Fecha y Hora:</strong> ${turno.fecha} - ${turno.hora}</p>
-            </div>
-            
-            <div style="margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px; text-align: left; font-size: 11px; line-height: 1.4; color: #475569;">
-              <p style="margin: 3px 0; font-weight: bold; color: #1e293b;">Requisitos para su atención:</p>
-              <p style="margin: 2px 0;">[ ] Cédula de Identidad (Original Vigente)</p>
-              <p style="margin: 2px 0;">[ ] Fotocopia legible de C.I.</p>
-              ${turno.nombre_centro.toLowerCase().includes('san juan de dios') || turno.nombre_centro.toLowerCase().includes('niño') || turno.nombre_centro.toLowerCase().includes('japon')
-                ? '<p style="margin: 2px 0; color: #b91c1c; font-weight: bold;">[ ] Formulario de Referencia D7 (Físico)</p>'
-                : ''
-              }
-            </div>
-
-            <div class="footer">
-              <p>Evite hacer colas temprano. Preséntese 15 minutos antes con su C.I.</p>
-              <p>TurnoYa - Santa Cruz de la Sierra</p>
-            </div>
-          </div>
-          <script>
-            window.onload = function() { window.print(); window.close(); }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    setPrintTarget({ type: 'ticket', data: turno });
   };
 
   // --- SOLICITAR TURNO (INSERT REAL EN SUPABASE) ---
@@ -1448,10 +1402,70 @@ function App() {
     }
   };
 
-  const handleSimularEscaneo = (ciInput: string) => {
-    setFiltroBusquedaCargada(ciInput);
-    setMostrarEscaneoSimulado(false);
-    setCiEscaneada('');
+  const handleProcesarFichaPorTexto = async (scannedText: string) => {
+    if (!scannedText.trim()) return;
+
+    // Buscar si es un ID de turno directo (real UUID o mock t-123)
+    let turnoEncontrado = turnos.find(t => t.id_turno.toLowerCase() === scannedText.trim().toLowerCase());
+
+    // Si no se encuentra por ID de turno, buscar por C.I. del paciente el primer turno 'Pendiente'
+    if (!turnoEncontrado) {
+      turnoEncontrado = turnos.find(t => t.ci_paciente.toLowerCase() === scannedText.trim().toLowerCase() && t.estado === 'Pendiente');
+    }
+
+    if (!turnoEncontrado) {
+      triggerAlert('Ficha no Encontrada', `No se encontró ninguna ficha pendiente con el código o C.I.: ${scannedText}`, 'error');
+      return;
+    }
+
+    // Si ya está procesado o atendido
+    if (turnoEncontrado.estado === 'En Atención') {
+      triggerAlert('Ficha ya Procesada', `La ficha del paciente ${turnoEncontrado.nombre_paciente} ya fue procesada anteriormente y está en espera de consulta.`, 'info');
+      return;
+    } else if (turnoEncontrado.estado === 'Atendido') {
+      triggerAlert('Ficha ya Atendida', `La ficha del paciente ${turnoEncontrado.nombre_paciente} ya fue atendida por el médico.`, 'info');
+      return;
+    } else if (turnoEncontrado.estado === 'Cancelado' || turnoEncontrado.estado === 'Ausente') {
+      triggerAlert('Ficha no Válida', `Esta ficha fue ${turnoEncontrado.estado.toLowerCase()} y no puede ser procesada.`, 'error');
+      return;
+    }
+
+    // Procesar la ficha (Cambiar a En Atención)
+    const isMock = turnoEncontrado.id_turno.startsWith('t-demo') || turnoEncontrado.id_turno.startsWith('t-');
+
+    if (!isMock) {
+      const { error } = await supabase
+        .from('turnos')
+        .update({ estado: 'En Atención' })
+        .eq('id_turno', turnoEncontrado.id_turno);
+
+      if (error) {
+        triggerAlert('Error', `Error al procesar ficha: ${error.message}`, 'error');
+        return;
+      }
+      triggerAlert('Ficha Procesada', `La ficha del paciente ${turnoEncontrado.nombre_paciente} ha sido procesada con éxito y pasó a estado "Procesado (En Espera de Consulta)".`, 'success');
+      fetchTurnosReales();
+    } else {
+      // Modo Demo Local
+      setTurnos(turnos.map(t => t.id_turno === turnoEncontrado!.id_turno ? { ...t, estado: 'En Atención' } : t));
+      triggerAlert('Ficha Procesada', `La ficha del paciente ${turnoEncontrado.nombre_paciente} ha sido procesada con éxito (Modo Demo).`, 'success');
+    }
+  };
+
+  const handleMarcarAusente = async (turno: Turno) => {
+    const isMock = turno.id_turno.startsWith('t-demo') || turno.id_turno.startsWith('t-');
+    if (!isMock) {
+      const { error } = await supabase.from('turnos').update({ estado: 'Ausente' }).eq('id_turno', turno.id_turno);
+      if (error) {
+        triggerAlert('Error', `Error al marcar ausente: ${error.message}`, 'error');
+        return;
+      }
+      triggerAlert('Paciente Ausente', 'El paciente ha sido marcado como Ausente en Supabase.', 'info');
+      fetchTurnosReales();
+    } else {
+      setTurnos(turnos.map(t => t.id_turno === turno.id_turno ? { ...t, estado: 'Ausente' } : t));
+      triggerAlert('Paciente Ausente', 'El paciente ha sido marcado como Ausente (Modo Demo).', 'info');
+    }
   };
 
   // Filtros
@@ -1605,7 +1619,115 @@ function App() {
         </div>
       </header>
 
+        {/* SECCIÓN OCULTA EN PANTALLA, ACTIVA EN IMPRESIÓN (PDF / FICHAS / REPORTES) */}
+        <div id="print-section">
+          {printTarget && printTarget.type === 'ticket' && (
+            <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px', maxWidth: '380px', margin: '0 auto', textAlign: 'center', color: '#1e293b' }}>
+              <div style={{ border: '3px dashed #475569', padding: '25px', borderRadius: '24px', background: '#f8fafc' }}>
+                <h2 style={{ color: '#2563eb', margin: '0 0 5px 0', fontSize: '24px', fontWeight: 900 }}>TurnoYa</h2>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', margin: '0 0 15px 0', letterSpacing: '1px', textTransform: 'uppercase' }}>Ficha de Atención Confirmada</p>
+                
+                <div style={{ fontSize: '32px', fontWeight: 900, margin: '15px 0', color: '#0f172a', background: '#e2e8f0', padding: '10px', borderRadius: '12px', letterSpacing: '2px' }}>
+                  #{printTarget.data.id_turno.substring(2, 8).toUpperCase()}
+                </div>
+                
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${printTarget.data.id_turno}`} 
+                  alt="Código QR de Ficha" 
+                  style={{ margin: '15px auto', display: 'block', width: '150px', height: '150px', border: '1px solid #cbd5e1', padding: '4px', background: 'white', borderRadius: '8px' }} 
+                />
 
+                <div style={{ textAlign: 'left', fontSize: '13px', lineHeight: '1.6', marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '15px' }}>
+                  <p style={{ margin: '6px 0' }}><strong>Paciente:</strong> {printTarget.data.nombre_paciente}</p>
+                  <p style={{ margin: '6px 0' }}><strong>C.I. Paciente:</strong> {printTarget.data.ci_paciente}</p>
+                  <p style={{ margin: '6px 0' }}><strong>Teléfono:</strong> {printTarget.data.telefono_paciente || 'No registrado'}</p>
+                  <p style={{ margin: '6px 0' }}><strong>Hospital:</strong> {printTarget.data.nombre_centro}</p>
+                  <p style={{ margin: '6px 0' }}><strong>Especialidad:</strong> {printTarget.data.especialidad_personal_salud}</p>
+                  <p style={{ margin: '6px 0' }}><strong>Médico:</strong> {printTarget.data.nombre_personal_salud}</p>
+                  <p style={{ margin: '6px 0' }}><strong>Consultorio:</strong> <span style={{ color: '#1d4ed8', fontWeight: 900 }}>{obtenerConsultorio(printTarget.data.especialidad_personal_salud)}</span></p>
+                  <p style={{ margin: '6px 0' }}><strong>Fecha y Hora:</strong> {printTarget.data.fecha} - {printTarget.data.hora}</p>
+                  <p style={{ margin: '6px 0', fontSize: '10px', color: '#64748b' }}><strong>Código de Ficha:</strong> {printTarget.data.id_turno}</p>
+                </div>
+
+                <div style={{ fontSize: '10px', color: '#64748b', borderTop: '1px solid #e2e8f0', marginTop: '15px', paddingTop: '15px' }}>
+                  <p style={{ margin: '2px 0', fontWeight: 'bold' }}>Presentarse 15 minutos antes de su hora.</p>
+                  <p style={{ margin: '2px 0' }}>UPDS Santa Cruz - Sistemas de Información II</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {printTarget && printTarget.type === 'report' && (
+            <div style={{ fontFamily: 'Arial, sans-serif', padding: '30px', color: '#1e293b' }}>
+              <h1 style={{ color: '#1e3a8a', margin: '0 0 5px 0', fontSize: '24px', fontWeight: 900 }}>TurnoYa - Reporte Estadístico de Fichas</h1>
+              <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '20px' }}>
+                <p style={{ margin: '3px 0' }}><strong>Hospital / Centro:</strong> {printTarget.data.hospital}</p>
+                <p style={{ margin: '3px 0' }}><strong>Periodo:</strong> {printTarget.data.rango}</p>
+                <p style={{ margin: '3px 0' }}><strong>Fecha de generación:</strong> {new Date().toLocaleString()}</p>
+              </div>
+              <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '20px 0' }} />
+              
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '15px', borderRadius: '12px', marginBottom: '25px', display: 'flex', gap: '20px', fontSize: '12px' }}>
+                <div><strong>Total Fichas:</strong> {printTarget.data.turnos.length}</div>
+                <div><strong>Atendidos:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Atendido').length}</div>
+                <div><strong>Pendientes / En Espera:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención').length}</div>
+                <div><strong>Cancelados/Ausentes:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Cancelado' || t.data?.turnos?.filter ? t.estado === 'Ausente' : t.estado === 'Ausente').length}</div>
+              </div>
+
+              <h3 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 10px 0' }}>Listado de Pacientes y Fichas ({printTarget.data.turnos.length})</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Código</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Paciente</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>C.I.</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Hospital</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Especialidad</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Fecha y Hora</th>
+                    <th style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'left' }}>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {printTarget.data.turnos.map(t => (
+                    <tr key={t.id_turno}>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.id_turno.substring(2, 8).toUpperCase()}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.nombre_paciente}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.ci_paciente}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.nombre_centro}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.especialidad_personal_salud}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px' }}>{t.fecha} - {t.hora}</td>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '8px', fontWeight: 'bold' }}>{t.estado}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <style>{`
+          @media print {
+            #root, footer, header, .no-print {
+              display: none !important;
+            }
+            #print-section {
+              display: block !important;
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              background: white !important;
+              color: black !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+          }
+          @media screen {
+            #print-section {
+              display: none !important;
+            }
+          }
+        `}</style>
 
       {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 max-w-7xl mx-auto px-4 md:px-6 py-8 w-full flex flex-col justify-center">
@@ -2229,8 +2351,13 @@ function App() {
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <h5 className="font-black text-slate-800 text-xs sm:text-sm truncate leading-tight">{turno.nombre_centro}</h5>
                                         <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : turno.estado === 'Cancelado' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                                          {turno.estado}
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                          turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 
+                                          turno.estado === 'En Atención' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                                          turno.estado === 'Cancelado' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 
+                                          'bg-amber-50 text-amber-700 border border-amber-100'
+                                        }`}>
+                                          {turno.estado === 'En Atención' ? 'Procesado' : turno.estado}
                                         </span>
                                       </div>
                                       <div className="flex gap-2.5 text-slate-500 font-bold text-[9px] sm:text-[10px]">
@@ -2256,7 +2383,7 @@ function App() {
                                       </div>
 
                                       <div className="flex flex-wrap gap-2 font-bold">
-                                        {turno.estado === 'Pendiente' && (
+                                        {(turno.estado === 'Pendiente' || turno.estado === 'En Atención') && (
                                           <>
                                             <button
                                               type="button"
@@ -2265,13 +2392,15 @@ function App() {
                                             >
                                               <Printer className="w-4 h-4 text-slate-600" /> Imprimir Ficha
                                             </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleCancelarTurno(turno)}
-                                              className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-[10px] sm:text-xs cursor-pointer"
-                                            >
-                                              <XCircle className="w-4 h-4 text-rose-500" /> Cancelar Ficha
-                                            </button>
+                                            {turno.estado === 'Pendiente' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleCancelarTurno(turno)}
+                                                className="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-[10px] sm:text-xs cursor-pointer"
+                                              >
+                                                <XCircle className="w-4 h-4 text-rose-500" /> Cancelar Ficha
+                                              </button>
+                                            )}
                                           </>
                                         )}
                                         {turno.estado === 'Atendido' && (
@@ -2313,6 +2442,18 @@ function App() {
                                           </div>
                                         );
                                       })()}
+
+                                      {turno.estado === 'En Atención' && (
+                                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-center space-y-2 text-[10px] text-slate-700">
+                                          <p className="text-xs text-indigo-900 font-black flex items-center justify-center gap-1">
+                                            <Activity className="w-4 h-4 animate-pulse text-indigo-600" /> ¡Ficha Procesada en Ventanilla!
+                                          </p>
+                                          <p className="text-[11px] text-indigo-700 font-bold leading-relaxed">
+                                            Su ticket ha sido verificado. Por favor, espere cerca del consultorio de <strong>{turno.especialidad_personal_salud}</strong>. 
+                                            La Dra. Suzanne Gutiérrez le llamará por altavoz a la brevedad.
+                                          </p>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -2439,7 +2580,7 @@ function App() {
                           >
                             <option value="">-- Seleccionar ficha pendiente --</option>
                             {turnos.filter(t => t.estado === 'Pendiente').map(t => (
-                              <option key={t.id_turno} value={t.ci_paciente} className="bg-slate-900 text-white">
+                              <option key={t.id_turno} value={t.id_turno} className="bg-slate-900 text-white">
                                 Ficha #{t.id_turno.substring(2,8).toUpperCase()} - C.I. {t.ci_paciente} ({t.nombre_paciente})
                               </option>
                             ))}
@@ -2453,14 +2594,14 @@ function App() {
 
                       <div className="space-y-1.5">
                         <label className="text-[9px] text-slate-400 font-black uppercase tracking-wider block text-center">
-                          O Ingrese la C.I. manualmente
+                          O Ingrese la C.I. o ID Ficha manualmente
                         </label>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={ciEscaneada}
                             onChange={(e) => setCiEscaneada(e.target.value)}
-                            placeholder="Ej: 7766554"
+                            placeholder="Ej: 7766554 o ID Ficha"
                             className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center text-sm font-bold text-white outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                           <button
@@ -2470,7 +2611,7 @@ function App() {
                                 triggerAlert("Error", "Por favor ingrese una C.I. válida o seleccione una ficha de simulación", "error");
                                 return;
                               }
-                              handleSimularEscaneo(ciEscaneada);
+                              handleProcesarFichaPorTexto(ciEscaneada);
                               setMostrarEscaneoSimulado(false);
                             }}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 rounded-2xl font-bold text-xs cursor-pointer shadow-md transition"
@@ -2493,21 +2634,21 @@ function App() {
                       onClick={() => { setEncargadoFilterTab('pendientes'); setEncargadoPage(1); }}
                       className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'pendientes' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
                     >
-                      Pendientes ({turnos.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención').length})
+                      🎟️ Fichas Pendientes ({turnos.filter(t => t.estado === 'Pendiente').length})
                     </button>
                     <button
                       type="button"
                       onClick={() => { setEncargadoFilterTab('procesados'); setEncargadoPage(1); }}
                       className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'procesados' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
                     >
-                      Procesados ({turnos.filter(t => t.estado === 'Atendido').length})
+                      ⚡ Procesadas / En Consulta ({turnos.filter(t => t.estado === 'En Atención').length})
                     </button>
                     <button
                       type="button"
                       onClick={() => { setEncargadoFilterTab('cancelados'); setEncargadoPage(1); }}
                       className={`flex-1 py-2.5 rounded-xl transition cursor-pointer text-center ${encargadoFilterTab === 'cancelados' ? 'bg-indigo-600 text-white shadow-md' : 'text-indigo-600 hover:text-indigo-900'}`}
                     >
-                      Cancelados ({turnos.filter(t => t.estado === 'Cancelado').length})
+                      📁 Historial / Atendidos ({turnos.filter(t => t.estado === 'Atendido' || t.estado === 'Cancelado' || t.estado === 'Ausente').length})
                     </button>
                   </div>
 
@@ -2544,11 +2685,11 @@ function App() {
 
                       // 2. Filtrar por Pestaña
                       if (encargadoFilterTab === 'pendientes') {
-                        list = list.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención');
+                        list = list.filter(t => t.estado === 'Pendiente');
                       } else if (encargadoFilterTab === 'procesados') {
-                        list = list.filter(t => t.estado === 'Atendido');
+                        list = list.filter(t => t.estado === 'En Atención');
                       } else {
-                        list = list.filter(t => t.estado === 'Cancelado' || t.estado === 'Ausente');
+                        list = list.filter(t => t.estado === 'Atendido' || t.estado === 'Cancelado' || t.estado === 'Ausente');
                       }
 
                       // 3. Paginar
@@ -2576,8 +2717,13 @@ function App() {
                                   <h4 className="font-black text-slate-800 text-sm leading-none">{turno.nombre_paciente}</h4>
                                   <span className="text-[10px] text-slate-400 font-bold">C.I.: {turno.ci_paciente}</span>
                                   <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">{turno.especialidad_personal_salud}</span>
-                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                                    {turno.estado}
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                    turno.estado === 'Atendido' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 
+                                    turno.estado === 'En Atención' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 
+                                    turno.estado === 'Cancelado' || turno.estado === 'Ausente' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
+                                    'bg-amber-50 text-amber-700 border border-amber-100'
+                                  }`}>
+                                    {turno.estado === 'En Atención' ? 'Procesado' : turno.estado}
                                   </span>
                                 </div>
                                 
@@ -2586,9 +2732,29 @@ function App() {
                                 </p>
                               </div>
 
-                              {/* Botón de Tachar de Inmediato como Atendido */}
+                              {/* Acciones de la Ficha dependientes del estado */}
                               <div className="flex gap-2 shrink-0 w-full md:w-auto font-bold">
                                 {turno.estado === 'Pendiente' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleProcesarFichaPorTexto(turno.id_turno)}
+                                      className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                    >
+                                      <ScanLine className="w-4 h-4" /> Procesar Ficha
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMarcarAusente(turno)}
+                                      className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 p-2.5 rounded-xl cursor-pointer"
+                                      title="Marcar como Ausente"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {turno.estado === 'En Atención' && (
                                   <>
                                     <button
                                       type="button"
@@ -2596,14 +2762,22 @@ function App() {
                                       className="bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 p-2.5 rounded-xl cursor-pointer"
                                       title="Llamar paciente por altavoz"
                                     >
-                                      <Volume2 className="w-4 h-4" />
+                                      <Volume2 className="w-4 h-4 text-slate-600" />
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setSelectedTurnoAtencion(turno)}
                                       className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
                                     >
-                                      <Check className="w-4 h-4" /> Registrar Atención (Tachar)
+                                      <Check className="w-4 h-4" /> Registrar Atención
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMarcarAusente(turno)}
+                                      className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 p-2.5 rounded-xl cursor-pointer"
+                                      title="Marcar como Ausente"
+                                    >
+                                      <XCircle className="w-4 h-4" />
                                     </button>
                                   </>
                                 )}
@@ -2916,77 +3090,22 @@ function App() {
                     </h4>
                     <button
                       onClick={() => {
-                        const reportWindow = window.open('', '_blank');
-                        if (!reportWindow) return;
-                        
                         const centroSeleccionado = centros.find(c => c.id_centro === adminFiltroCentroId);
                         const hospitalNombre = centroSeleccionado ? centroSeleccionado.nombre : 'Todos los Hospitales';
                         const rangoFechas = (adminFiltroFechaDesde || adminFiltroFechaHasta) 
                           ? `Filtro de Fecha: ${adminFiltroFechaDesde || 'Inicio'} hasta ${adminFiltroFechaHasta || 'Fin'}`
                           : 'Rango de Fecha: Histórico Completo';
 
-                        reportWindow.document.write(`
-                          <html>
-                            <head>
-                              <title>Reporte de Turnos - TurnoYa</title>
-                              <style>
-                                body { font-family: sans-serif; padding: 40px; color: #334155; }
-                                h1 { color: #1e3a8a; margin-bottom: 5px; }
-                                .meta { color: #64748b; font-size: 14px; margin-bottom: 20px; }
-                                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                                th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
-                                th { background-color: #f8fafc; }
-                                .summary-box { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-                              </style>
-                            </head>
-                            <body>
-                              <h1>TurnoYa - Reporte Estadístico</h1>
-                              <div class="meta">
-                                <p><strong>Hospital / Centro:</strong> ${hospitalNombre}</p>
-                                <p><strong>Periodo:</strong> ${rangoFechas}</p>
-                                <p>Fecha de generación: ${new Date().toLocaleString()}</p>
-                              </div>
-                              <hr />
-                              <div class="summary-box">
-                                <h3>Resumen de Fichas Filtradas</h3>
-                                <p><strong>Total Fichas Solicitadas:</strong> ${turnosFiltradosAdmin.length}</p>
-                                <p><strong>Atendidos (Atención Médica):</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Atendido').length}</p>
-                                <p><strong>Pendientes:</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Pendiente').length}</p>
-                                <p><strong>Cancelados:</strong> ${turnosFiltradosAdmin.filter(t => t.estado === 'Cancelado').length}</p>
-                              </div>
-                              
-                              <h3>Listado de Fichas (${turnosFiltradosAdmin.length})</h3>
-                              <table>
-                                <thead>
-                                  <tr>
-                                    <th>ID Turno</th>
-                                    <th>Paciente</th>
-                                    <th>Hospital</th>
-                                    <th>Especialidad</th>
-                                    <th>Fecha y Hora</th>
-                                    <th>Estado</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  ${turnosFiltradosAdmin.map(t => `
-                                    <tr>
-                                      <td>${t.id_turno.substring(0,8).toUpperCase()}</td>
-                                      <td>${t.nombre_paciente}</td>
-                                      <td>${t.nombre_centro}</td>
-                                      <td>${t.especialidad_personal_salud}</td>
-                                      <td>${t.fecha} - ${t.hora}</td>
-                                      <td>${t.estado}</td>
-                                    </tr>
-                                  `).join('')}
-                                </tbody>
-                              </table>
-                              <script>window.onload = function() { window.print(); }</script>
-                            </body>
-                          </html>
-                        `);
-                        reportWindow.document.close();
+                        setPrintTarget({
+                          type: 'report',
+                          data: {
+                            turnos: turnosFiltradosAdmin,
+                            hospital: hospitalNombre,
+                            rango: rangoFechas
+                          }
+                        });
                       }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1 cursor-pointer shadow-xs"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Download className="w-4 h-4" /> Exportar Reporte (PDF/Imprimir)
                     </button>
