@@ -839,7 +839,7 @@ function App() {
               });
             };
             
-            html5QrCodeScanner.render(qrCodeSuccessCallback, (error: any) => {});
+            html5QrCodeScanner.render(qrCodeSuccessCallback, () => {});
           }
         } catch (e) {
           console.error("Error al instanciar html5-qrcode scanner:", e);
@@ -1671,7 +1671,7 @@ function App() {
                 <div><strong>Total Fichas:</strong> {printTarget.data.turnos.length}</div>
                 <div><strong>Atendidos:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Atendido').length}</div>
                 <div><strong>Pendientes / En Espera:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Pendiente' || t.estado === 'En Atención').length}</div>
-                <div><strong>Cancelados/Ausentes:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Cancelado' || t.data?.turnos?.filter ? t.estado === 'Ausente' : t.estado === 'Ausente').length}</div>
+                <div><strong>Cancelados/Ausentes:</strong> {printTarget.data.turnos.filter(t => t.estado === 'Cancelado' || t.estado === 'Ausente').length}</div>
               </div>
 
               <h3 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 10px 0' }}>Listado de Pacientes y Fichas ({printTarget.data.turnos.length})</h3>
