@@ -642,9 +642,18 @@ function App() {
     if (printTarget) {
       const timer = setTimeout(() => {
         window.print();
-        setPrintTarget(null);
       }, 500);
-      return () => clearTimeout(timer);
+
+      const handleAfterPrint = () => {
+        setPrintTarget(null);
+      };
+
+      window.addEventListener('afterprint', handleAfterPrint);
+
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('afterprint', handleAfterPrint);
+      };
     }
   }, [printTarget]);
 
@@ -1707,11 +1716,27 @@ function App() {
 
         <style>{`
           @media print {
-            #root, footer, header, .no-print {
+            /* Ocultar la cabecera, pie de página, contenido principal y modales de diálogo */
+            header, footer, main, .no-print, div[class*="fixed"], .swal2-container {
               display: none !important;
+              height: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              overflow: hidden !important;
             }
+            
+            /* Asegurar que el contenedor principal de React permanezca visible */
+            #root, .min-h-screen {
+              background: white !important;
+              min-height: auto !important;
+              height: auto !important;
+              display: block !important;
+            }
+
+            /* Mostrar y posicionar el área de impresión */
             #print-section {
               display: block !important;
+              visibility: visible !important;
               position: absolute;
               left: 0;
               top: 0;
@@ -1720,6 +1745,9 @@ function App() {
               color: black !important;
               padding: 0 !important;
               margin: 0 !important;
+            }
+            #print-section * {
+              visibility: visible !important;
             }
           }
           @media screen {
