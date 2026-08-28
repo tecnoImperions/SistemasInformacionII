@@ -287,3 +287,45 @@ insert into public.especialidades (nombre, description) values
 ('Traumatología', 'Tratamiento de fracturas, dolores articulares y lesiones óseas.'),
 ('Medicina General', 'Atención médica primaria y control inicial de pacientes.')
 on conflict (nombre) do nothing;
+
+-- 3. Horarios de prueba (para mañana, asociados dinámicamente a los centros de salud creados)
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '08:00:00', '08:30:00', true
+from public.centros_salud where nombre = 'Hospital Municipal Pampa de la Isla'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '08:30:00', '09:00:00', true
+from public.centros_salud where nombre = 'Hospital Municipal Pampa de la Isla'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '09:00:00', '09:30:00', true
+from public.centros_salud where nombre = 'Hospital Municipal Pampa de la Isla'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '09:00:00', '09:30:00', true
+from public.centros_salud where nombre = 'Hospital General San Juan de Dios'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '09:30:00', '10:00:00', true
+from public.centros_salud where nombre = 'Hospital General San Juan de Dios'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '10:00:00', '10:30:00', true
+from public.centros_salud where nombre = 'Hospital General San Juan de Dios'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '08:00:00', '08:30:00', true
+from public.centros_salud where nombre = 'Hospital de Niños Mario Ortiz Suarez'
+on conflict do nothing;
+
+insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible)
+select id_centro, current_date + interval '1 day', '08:30:00', '09:00:00', true
+from public.centros_salud where nombre = 'Hospital de Niños Mario Ortiz Suarez'
+on conflict do nothing;
+

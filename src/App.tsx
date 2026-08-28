@@ -498,6 +498,52 @@ function App() {
   const fetchTurnosReales = async () => {
     if (!currentUser) return;
 
+    if (currentUser.id_usuario.startsWith('u-demo')) {
+      // Cargar turnos demo locales
+      const mockTurnos: Turno[] = [
+        {
+          id_turno: 't-demo-1',
+          id_paciente: 'u-demo-pac',
+          nombre_paciente: 'Paciente de Prueba',
+          ci_paciente: '7766554',
+          telefono_paciente: '76543210',
+          id_personal_salud: 'u-demo-enc',
+          nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
+          especialidad_personal_salud: 'Medicina General',
+          id_centro: 'c-1',
+          nombre_centro: 'Hospital Municipal Plan 3000',
+          id_horario: 'h-demo-1',
+          fecha: new Date().toISOString().split('T')[0],
+          hora: '08:30 AM',
+          estado: 'Pendiente',
+          fecha_solicitud: new Date().toISOString()
+        },
+        {
+          id_turno: 't-demo-2',
+          id_paciente: 'u-demo-pac',
+          nombre_paciente: 'Paciente de Prueba',
+          ci_paciente: '7766554',
+          telefono_paciente: '76543210',
+          id_personal_salud: 'u-demo-enc',
+          nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
+          especialidad_personal_salud: 'Pediatría',
+          id_centro: 'c-2',
+          nombre_centro: 'Hospital Municipal Pampa de la Isla',
+          id_horario: 'h-demo-2',
+          fecha: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+          hora: '10:00 AM',
+          estado: 'Atendido',
+          fecha_solicitud: new Date(Date.now() - 86400000).toISOString()
+        }
+      ];
+      if (currentUser.rol === 'paciente') {
+        setTurnos(mockTurnos.filter(t => t.id_paciente === currentUser.id_usuario));
+      } else {
+        setTurnos(mockTurnos);
+      }
+      return;
+    }
+
     if (currentUser.rol === 'paciente') {
       const { data: dbTurnos } = await supabase
         .from('turnos')
@@ -565,6 +611,28 @@ function App() {
   useEffect(() => {
     fetchTurnosReales();
   }, [currentUser, centros]);
+
+  // Cargar horarios reales de Supabase cuando se selecciona un hospital
+  useEffect(() => {
+    const fetchHorarios = async () => {
+      if (!selectedCentroId || selectedCentroId.startsWith('c-')) return;
+      const { data: dbHorarios } = await supabase
+        .from('horarios')
+        .select('*')
+        .eq('id_centro', selectedCentroId);
+      if (dbHorarios) {
+        setHorarios(dbHorarios.map(h => ({
+          id_horario: h.id_horario,
+          id_centro: h.id_centro,
+          fecha: h.fecha,
+          hora_inicio: h.hora_inicio.substring(0, 5),
+          hora_fin: h.hora_fin.substring(0, 5),
+          disponible: h.disponible
+        })));
+      }
+    };
+    fetchHorarios();
+  }, [selectedCentroId]);
 
   // Cargar sesión y escuchar cambios en Supabase Auth
   useEffect(() => {
@@ -881,30 +949,92 @@ function App() {
     e.preventDefault();
     if (!selectedHorarioObj || !currentUser) return;
 
-    // 1. Insertar turno en Supabase
-    const isMockHorario = selectedHorarioObj.id_horario.startsWith('h-auto');
-    const { data: insertData, error: insertError } = await supabase.from('turnos').insert([{
-      id_paciente: currentUser.id_usuario,
-      id_centro: selectedCentroId,
-      id_horario: isMockHorario ? null : selectedHorarioObj.id_horario,
-      fecha: selectedHorarioObj.fecha,
-      hora: selectedHorarioObj.hora_inicio,
-      estado: 'Pendiente'
-    }]).select();
+    const isMock = currentUser.id_usuario.startsWith('u-demo') || selectedCentroId.startsWith('c-');
+    let idCita = 't-' + Date.now();
+    let insertData = null;
 
-    if (insertError) {
-      triggerAlert('Error al Reservar', `Error: ${insertError.message}`, 'error');
-      return;
-    }
+    if (!isMock) {
+      const isMockHorario = selectedHorarioObj.id_horario.startsWith('h-auto');
+      let idHorarioReal = selectedHorarioObj.id_horario;
 
-    // 2. Marcar horario como no disponible en la base de datos
-    // Si es un horario autogenerado por fallback (id comienza con h-auto), no intentamos actualizarlo en Supabase
-    if (!selectedHorarioObj.id_horario.startsWith('h-auto')) {
-      await supabase.from('horarios').update({ disponible: false }).eq('id_horario', selectedHorarioObj.id_horario);
+      // Si es un horario autogenerado (h-auto), lo registramos primero en la tabla 'horarios' como no disponible (ocupado)
+      if (isMockHorario) {
+        const { data: nuevoHorario, error: errorHorario } = await supabase
+          .from('horarios')
+          .insert([{
+            id_centro: selectedCentroId,
+            fecha: selectedHorarioObj.fecha,
+            hora_inicio: selectedHorarioObj.hora_inicio,
+            hora_fin: selectedHorarioObj.hora_inicio === '08:00' ? '08:30' : 
+                      selectedHorarioObj.hora_inicio === '07:30' ? '08:00' :
+                      selectedHorarioObj.hora_inicio === '07:00' ? '07:30' :
+                      selectedHorarioObj.hora_inicio === '06:30' ? '07:00' : '06:30',
+            disponible: false
+          }])
+          .select()
+          .single();
+
+        if (errorHorario) {
+          triggerAlert('Error al Reservar', `Error al crear bloque de horario: ${errorHorario.message}`, 'error');
+          return;
+        }
+
+        if (nuevoHorario) {
+          idHorarioReal = nuevoHorario.id_horario;
+        }
+      }
+
+      // 1. Insertar turno en Supabase
+      const { data, error: insertError } = await supabase.from('turnos').insert([{
+        id_paciente: currentUser.id_usuario,
+        id_centro: selectedCentroId,
+        id_horario: idHorarioReal,
+        fecha: selectedHorarioObj.fecha,
+        hora: selectedHorarioObj.hora_inicio,
+        estado: 'Pendiente'
+      }]).select();
+
+      if (insertError) {
+        triggerAlert('Error al Reservar', `Error: ${insertError.message}`, 'error');
+        return;
+      }
+      insertData = data;
+      if (data && data[0]) {
+        idCita = data[0].id_turno;
+      }
+
+      // 2. Marcar horario como no disponible en la base de datos (solo si era un horario pre-creado en BD)
+      if (!isMockHorario) {
+        await supabase.from('horarios').update({ disponible: false }).eq('id_horario', selectedHorarioObj.id_horario);
+      }
+    } else {
+      // Registrar localmente para demo
+      const nuevoTurnoLocal: Turno = {
+        id_turno: idCita,
+        id_paciente: currentUser.id_usuario,
+        nombre_paciente: `${currentUser.nombre} ${currentUser.apellido || ''}`,
+        ci_paciente: currentUser.ci,
+        telefono_paciente: currentUser.telefono || '',
+        id_personal_salud: '',
+        nombre_personal_salud: 'Dra. Suzanne Gutiérrez',
+        especialidad_personal_salud: 'Medicina General',
+        id_centro: selectedCentroId,
+        nombre_centro: centros.find(c => c.id_centro === selectedCentroId)?.nombre || 'Hospital Seleccionado',
+        id_horario: selectedHorarioObj.id_horario,
+        fecha: selectedHorarioObj.fecha,
+        hora: `${selectedHorarioObj.hora_inicio} AM`,
+        estado: 'Pendiente',
+        fecha_solicitud: new Date().toISOString()
+      };
+      setTurnos([nuevoTurnoLocal, ...turnos]);
+
+      // Simular cambio local de disponibilidad de horario
+      if (!selectedHorarioObj.id_horario.startsWith('h-auto')) {
+        setHorarios(horarios.map(h => h.id_horario === selectedHorarioObj.id_horario ? { ...h, disponible: false } : h));
+      }
     }
 
     // 3. Recargar notificaciones locales y turnos
-    const idCita = insertData && insertData[0] ? insertData[0].id_turno : 't-' + Date.now();
     const nuevaNotif: NotificacionPush = {
       id: 'n-' + Date.now(),
       titulo: '📧 Correo SMTP Enviado',
@@ -988,7 +1118,7 @@ function App() {
       .then(({ data, error }) => {
         console.log("Resend Supabase RPC response:", data, error);
         if (error) {
-          console.warn("RPC enviar_email_resend no está creado, usando fallback de proxy público...", error);
+          console.log("RPC enviar_email_resend no está creado, usando fallback de proxy público...", error);
           
           // Fallback a fetchConProxies si la función RPC no está creada en la base de datos
           fetchConProxies('https://api.resend.com/emails', {
@@ -1020,50 +1150,9 @@ function App() {
       });
     }
 
-    // Recargar horarios y turnos de Supabase
-    fetchTurnosReales();
-    const { data: dbHorarios } = await supabase.from('horarios').select('*');
-    if (dbHorarios) {
-      setHorarios(dbHorarios.map(h => ({
-        id_horario: h.id_horario,
-        id_centro: h.id_centro,
-        fecha: h.fecha,
-        hora_inicio: h.hora_inicio.substring(0, 5),
-        hora_fin: h.hora_fin.substring(0, 5),
-        disponible: h.disponible
-      })));
-    }
-
-    // Resetear Wizard
-    setWizardStep(1);
-    setSelectedNivel(null);
-    setSelectedCentroId('');
-    setSelectedEspecialidadId('');
-    setSelectedHorarioObj(null);
-    setMotivoConsulta('');
-
-    triggerAlert('Ficha Reservada', 'Ficha reservada con éxito en la base de datos. Correo SMTP de confirmación enviado.', 'success');
-  };
-
-
-  // --- REGISTRAR HORARIO DE CITA (INSERT REAL EN SUPABASE) ---
-  const handleCrearHorario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nuevoHorarioCentro) return;
-
-    const { error } = await supabase.from('horarios').insert([{
-      id_centro: nuevoHorarioCentro,
-      fecha: nuevoHorarioFecha,
-      hora_inicio: nuevoHorarioInicio,
-      hora_fin: nuevoHorarioFin,
-      disponible: true
-    }]);
-
-    if (error) {
-      triggerAlert('Error', `Error al registrar horario: ${error.message}`, 'error');
-    } else {
-      triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito en la base de datos de Supabase.', 'success');
-      // Recargar horarios
+    if (!isMock) {
+      // Recargar horarios y turnos de Supabase
+      fetchTurnosReales();
       const { data: dbHorarios } = await supabase.from('horarios').select('*');
       if (dbHorarios) {
         setHorarios(dbHorarios.map(h => ({
@@ -1076,35 +1165,39 @@ function App() {
         })));
       }
     }
+
+    // Resetear Wizard
+    setWizardStep(1);
+    setSelectedNivel(null);
+    setSelectedCentroId('');
+    setSelectedEspecialidadId('');
+    setSelectedHorarioObj(null);
+    setMotivoConsulta('');
+
+    triggerAlert('Ficha Reservada', 'Ficha reservada con éxito. Correo SMTP de confirmación enviado.', 'success');
   };
 
-  // --- CANCELAR TURNO (UPDATE REAL EN SUPABASE) ---
-  const handleCancelarTurno = async (turno: Turno) => {
-    triggerConfirm(
-      '¿Cancelar Ficha Médica?',
-      'Esta acción liberará el bloque horario en la base de datos para que otro paciente pueda reservarlo.',
-      async () => {
-        const { error } = await supabase
-          .from('turnos')
-          .update({ estado: 'Cancelado' })
-          .eq('id_turno', turno.id_turno);
 
-        if (error) {
-          triggerAlert('Error', `Error al cancelar turno: ${error.message}`, 'error');
-          return;
-        }
+  // --- REGISTRAR HORARIO DE CITA (INSERT REAL EN SUPABASE) ---
+  const handleCrearHorario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoHorarioCentro) return;
 
-        // Liberar horario
-        if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
-          await supabase
-            .from('horarios')
-            .update({ disponible: true })
-            .eq('id_horario', turno.id_horario);
-        }
+    const isMock = currentUser?.id_usuario.startsWith('u-demo') || nuevoHorarioCentro.startsWith('c-');
 
-        triggerAlert('Ficha Cancelada', 'La ficha médica ha sido cancelada con éxito.', 'success');
-        fetchTurnosReales();
-        
+    if (!isMock) {
+      const { error } = await supabase.from('horarios').insert([{
+        id_centro: nuevoHorarioCentro,
+        fecha: nuevoHorarioFecha,
+        hora_inicio: nuevoHorarioInicio,
+        hora_fin: nuevoHorarioFin,
+        disponible: true
+      }]);
+
+      if (error) {
+        triggerAlert('Error', `Error al registrar horario: ${error.message}`, 'error');
+      } else {
+        triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito en la base de datos de Supabase.', 'success');
         // Recargar horarios
         const { data: dbHorarios } = await supabase.from('horarios').select('*');
         if (dbHorarios) {
@@ -1118,6 +1211,72 @@ function App() {
           })));
         }
       }
+    } else {
+      // Registrar localmente para demo
+      const nuevoHorarioLocal: Horario = {
+        id_horario: 'h-' + Date.now(),
+        id_centro: nuevoHorarioCentro,
+        fecha: nuevoHorarioFecha,
+        hora_inicio: nuevoHorarioInicio,
+        hora_fin: nuevoHorarioFin,
+        disponible: true
+      };
+      setHorarios([...horarios, nuevoHorarioLocal]);
+      triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito (Modo Demo).', 'success');
+    }
+  };
+
+  // --- CANCELAR TURNO (UPDATE REAL EN SUPABASE) ---
+  const handleCancelarTurno = async (turno: Turno) => {
+    triggerConfirm(
+      '¿Cancelar Ficha Médica?',
+      'Esta acción liberará el bloque horario en la base de datos para que otro paciente pueda reservarlo.',
+      async () => {
+        const isMock = turno.id_turno.startsWith('t-demo') || turno.id_turno.startsWith('t-');
+
+        if (!isMock) {
+          const { error } = await supabase
+            .from('turnos')
+            .update({ estado: 'Cancelado' })
+            .eq('id_turno', turno.id_turno);
+
+          if (error) {
+            triggerAlert('Error', `Error al cancelar turno: ${error.message}`, 'error');
+            return;
+          }
+
+          // Liberar horario
+          if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
+            await supabase
+              .from('horarios')
+              .update({ disponible: true })
+              .eq('id_horario', turno.id_horario);
+          }
+
+          triggerAlert('Ficha Cancelada', 'La ficha médica ha sido cancelada con éxito.', 'success');
+          fetchTurnosReales();
+          
+          // Recargar horarios
+          const { data: dbHorarios } = await supabase.from('horarios').select('*');
+          if (dbHorarios) {
+            setHorarios(dbHorarios.map(h => ({
+              id_horario: h.id_horario,
+              id_centro: h.id_centro,
+              fecha: h.fecha,
+              hora_inicio: h.hora_inicio.substring(0, 5),
+              hora_fin: h.hora_fin.substring(0, 5),
+              disponible: h.disponible
+            })));
+          }
+        } else {
+          // Cancelación local en modo demo
+          setTurnos(turnos.map(t => t.id_turno === turno.id_turno ? { ...t, estado: 'Cancelado' } : t));
+          if (turno.id_horario && !turno.id_horario.startsWith('h-auto')) {
+            setHorarios(horarios.map(h => h.id_horario === turno.id_horario ? { ...h, disponible: true } : h));
+          }
+          triggerAlert('Ficha Cancelada', 'La ficha médica ha sido cancelada con éxito (Modo Demo).', 'success');
+        }
+      }
     );
   };
 
@@ -1126,39 +1285,46 @@ function App() {
     e.preventDefault();
     if (!selectedTurnoAtencion) return;
 
-    // 1. Guardar registro en atenciones
-    const { error: errorAtencion } = await supabase.from('atenciones').insert([{
-      id_turno: selectedTurnoAtencion.id_turno,
-      diagnostico: atencionDiagnostico,
-      observaciones: atencionObservaciones,
-      resultado: atencionResultado
-    }]);
+    const isMock = selectedTurnoAtencion.id_turno.startsWith('t-demo') || selectedTurnoAtencion.id_turno.startsWith('t-');
 
-    if (errorAtencion) {
-      triggerAlert('Error', `Error al registrar atención: ${errorAtencion.message}`, 'error');
-      return;
+    if (!isMock) {
+      // 1. Guardar registro en atenciones
+      const { error: errorAtencion } = await supabase.from('atenciones').insert([{
+        id_turno: selectedTurnoAtencion.id_turno,
+        diagnostico: atencionDiagnostico,
+        observaciones: atencionObservaciones,
+        resultado: atencionResultado
+      }]);
+
+      if (errorAtencion) {
+        triggerAlert('Error', `Error al registrar atención: ${errorAtencion.message}`, 'error');
+        return;
+      }
+
+      // 2. Marcar el turno como Atendido
+      const { error: errorTurno } = await supabase
+        .from('turnos')
+        .update({ estado: 'Atendido' })
+        .eq('id_turno', selectedTurnoAtencion.id_turno);
+
+      if (errorTurno) {
+        triggerAlert('Error', `Error al actualizar estado: ${errorTurno.message}`, 'error');
+        return;
+      }
+
+      triggerAlert('Atención Registrada', '¡Consulta y atención clínica registrada con éxito en Supabase!', 'success');
+      fetchTurnosReales();
+    } else {
+      // Registrar localmente para demo
+      setTurnos(turnos.map(t => t.id_turno === selectedTurnoAtencion.id_turno ? { ...t, estado: 'Atendido' } : t));
+      triggerAlert('Atención Registrada', '¡Consulta y atención clínica registrada con éxito (Modo Demo)!', 'success');
     }
-
-    // 2. Marcar el turno como Atendido
-    const { error: errorTurno } = await supabase
-      .from('turnos')
-      .update({ estado: 'Atendido' })
-      .eq('id_turno', selectedTurnoAtencion.id_turno);
-
-    if (errorTurno) {
-      triggerAlert('Error', `Error al actualizar estado: ${errorTurno.message}`, 'error');
-      return;
-    }
-
-    triggerAlert('Atención Registrada', '¡Consulta y atención clínica registrada con éxito en Supabase!', 'success');
     
     // Limpiar estados
     setSelectedTurnoAtencion(null);
     setAtencionDiagnostico('');
     setAtencionObservaciones('');
     setAtencionResultado('');
-    
-    fetchTurnosReales();
   };
 
   // --- REGISTRAR CENTRO DE SALUD (INSERT REAL EN SUPABASE) ---
@@ -1166,29 +1332,81 @@ function App() {
     e.preventDefault();
     if (!nuevoCentroNombre.trim()) return;
 
-    const { error } = await supabase.from('centros_salud').insert([{
-      nombre: nuevoCentroNombre,
-      direccion: nuevoCentroDir,
-      nivel_atencion: nuevoCentroNivel,
-      telefono: nuevoCentroTelf,
-      imagen_url: nuevoCentroImagenUrl || null,
-      latitud: parseFloat(nuevoCentroLat) || 50,
-      longitud: parseFloat(nuevoCentroLong) || 50,
-      especialidades: nuevoCentroEspecialidades
-    }]);
+    const isMock = currentUser?.id_usuario.startsWith('u-demo') || false;
 
-    if (error) {
-      if (error.message.includes('does not exist') || error.code === '42703') {
-        triggerAlert(
-          'Alerta de Base de Datos',
-          `Debe ejecutar primero el script SQL de migración en Supabase para agregar las nuevas columnas (imagen_url, latitud, longitud, especialidades). Detalle: ${error.message}`,
-          'error'
-        );
+    if (!isMock) {
+      const { error } = await supabase.from('centros_salud').insert([{
+        nombre: nuevoCentroNombre,
+        direccion: nuevoCentroDir,
+        nivel_atencion: nuevoCentroNivel,
+        telefono: nuevoCentroTelf,
+        imagen_url: nuevoCentroImagenUrl || null,
+        latitud: parseFloat(nuevoCentroLat) || 50,
+        longitud: parseFloat(nuevoCentroLong) || 50,
+        especialidades: nuevoCentroEspecialidades
+      }]);
+
+      if (error) {
+        if (error.message.includes('does not exist') || error.code === '42703') {
+          triggerAlert(
+            'Alerta de Base de Datos',
+            `Debe ejecutar primero el script SQL de migración en Supabase para agregar las nuevas columnas (imagen_url, latitud, longitud, especialidades). Detalle: ${error.message}`,
+            'error'
+          );
+        } else {
+          triggerAlert('Error', `Error al registrar hospital: ${error.message}`, 'error');
+        }
       } else {
-        triggerAlert('Error', `Error al registrar hospital: ${error.message}`, 'error');
+        triggerAlert('Hospital Registrado', 'Hospital registrado exitosamente en la base de datos de Supabase.', 'success');
+        setNuevoCentroNombre('');
+        setNuevoCentroDir('');
+        setNuevoCentroTelf('');
+        setNuevoCentroImagenUrl('');
+        setNuevoCentroLat('50');
+        setNuevoCentroLong('50');
+        setNuevoCentroEspecialidades(['e-1']);
+
+        // Recargar centros
+        const { data: dbCentros } = await supabase.from('centros_salud').select('*');
+        if (dbCentros) {
+          const merged = dbCentros.map(dbc => {
+            const local = centrosSantaCruz.find(lc => lc.nombre.toLowerCase().includes(dbc.nombre.toLowerCase()));
+            return {
+              id_centro: dbc.id_centro,
+              nombre: dbc.nombre,
+              direccion: dbc.direccion || local?.direccion || 'Dirección de Santa Cruz',
+              nivel_atencion: dbc.nivel_atencion,
+              telefono: dbc.telefono || local?.telefono || '3330000',
+              como_llegar: local?.como_llegar || 'Líneas de micro generales',
+              horario_fichas: local?.horario_fichas || '06:00 AM - 12:00 PM',
+              distrito: local?.distrito || 'Santa Cruz de la Sierra',
+              imagen_url: dbc.imagen_url || local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+              latitud: dbc.latitud !== undefined && dbc.latitud !== null ? dbc.latitud : (local?.latitud || 50),
+              longitud: dbc.longitud !== undefined && dbc.longitud !== null ? dbc.longitud : (local?.longitud || 50),
+              especialidades: dbc.especialidades || local?.especialidades || ['e-1']
+            };
+          });
+          setCentros(merged);
+        }
       }
     } else {
-      triggerAlert('Hospital Registrado', 'Hospital registrado exitosamente en la base de datos de Supabase.', 'success');
+      // Registrar localmente para demo
+      const nuevoCentroLocal: CentroSalud = {
+        id_centro: 'c-' + Date.now(),
+        nombre: nuevoCentroNombre,
+        direccion: nuevoCentroDir,
+        nivel_atencion: nuevoCentroNivel,
+        telefono: nuevoCentroTelf,
+        como_llegar: 'Líneas de micro locales',
+        horario_fichas: '06:00 AM - 12:00 PM',
+        distrito: 'Distrito local',
+        imagen_url: nuevoCentroImagenUrl || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
+        latitud: parseFloat(nuevoCentroLat) || -17.78189,
+        longitud: parseFloat(nuevoCentroLong) || -63.18212,
+        especialidades: nuevoCentroEspecialidades
+      };
+      setCentros([...centros, nuevoCentroLocal]);
+      triggerAlert('Hospital Registrado', 'Hospital registrado exitosamente (Modo Demo).', 'success');
       setNuevoCentroNombre('');
       setNuevoCentroDir('');
       setNuevoCentroTelf('');
@@ -1196,29 +1414,6 @@ function App() {
       setNuevoCentroLat('50');
       setNuevoCentroLong('50');
       setNuevoCentroEspecialidades(['e-1']);
-
-      // Recargar centros
-      const { data: dbCentros } = await supabase.from('centros_salud').select('*');
-      if (dbCentros) {
-        const merged = dbCentros.map(dbc => {
-          const local = centrosSantaCruz.find(lc => lc.nombre.toLowerCase().includes(dbc.nombre.toLowerCase()));
-          return {
-            id_centro: dbc.id_centro,
-            nombre: dbc.nombre,
-            direccion: dbc.direccion || local?.direccion || 'Dirección de Santa Cruz',
-            nivel_atencion: dbc.nivel_atencion,
-            telefono: dbc.telefono || local?.telefono || '3330000',
-            como_llegar: local?.como_llegar || 'Líneas de micro generales',
-            horario_fichas: local?.horario_fichas || '06:00 AM - 12:00 PM',
-            distrito: local?.distrito || 'Santa Cruz de la Sierra',
-            imagen_url: dbc.imagen_url || local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
-            latitud: dbc.latitud !== undefined && dbc.latitud !== null ? dbc.latitud : (local?.latitud || 50),
-            longitud: dbc.longitud !== undefined && dbc.longitud !== null ? dbc.longitud : (local?.longitud || 50),
-            especialidades: dbc.especialidades || local?.especialidades || ['e-1']
-          };
-        });
-        setCentros(merged);
-      }
     }
   };
 
@@ -1232,18 +1427,52 @@ function App() {
   const centrosFiltrados = centros.filter(c => c.nivel_atencion === selectedNivel);
   
   const obtenerHorarios = () => {
-    const listado = horarios.filter(h => h.id_centro === selectedCentroId && h.disponible);
-    if (listado.length > 0) return listado;
-    
-    // Generar 5 horarios matutinos automáticos si no existen registros previos para este hospital
     const hoyStr = new Date().toISOString().split('T')[0];
-    return [
-      { id_horario: `h-auto-1-${selectedCentroId}`, id_centro: selectedCentroId, fecha: hoyStr, hora_inicio: '06:00', hora_fin: '06:30', disponible: true },
-      { id_horario: `h-auto-2-${selectedCentroId}`, id_centro: selectedCentroId, fecha: hoyStr, hora_inicio: '06:30', hora_fin: '07:00', disponible: true },
-      { id_horario: `h-auto-3-${selectedCentroId}`, id_centro: selectedCentroId, fecha: hoyStr, hora_inicio: '07:00', hora_fin: '07:30', disponible: true },
-      { id_horario: `h-auto-4-${selectedCentroId}`, id_centro: selectedCentroId, fecha: hoyStr, hora_inicio: '07:30', hora_fin: '08:00', disponible: true },
-      { id_horario: `h-auto-5-${selectedCentroId}`, id_centro: selectedCentroId, fecha: hoyStr, hora_inicio: '08:00', hora_fin: '08:30', disponible: true }
+    const dbHorariosCentro = horarios.filter(h => h.id_centro === selectedCentroId);
+
+    // Definir los 5 horarios fallback por defecto
+    const fallbackSlots = [
+      { hora_inicio: '06:00', hora_fin: '06:30' },
+      { hora_inicio: '06:30', hora_fin: '07:00' },
+      { hora_inicio: '07:00', hora_fin: '07:30' },
+      { hora_inicio: '07:30', hora_fin: '08:00' },
+      { hora_inicio: '08:00', hora_fin: '08:30' }
     ];
+
+    // Verificar si hay algún horario en la base de datos que sea "personalizado"
+    // (es decir, creado por un administrador, que no coincide con las horas de fallback o que está explícitamente disponible)
+    const tieneHorariosPersonalizados = dbHorariosCentro.some(h => {
+      const coincideConFallback = fallbackSlots.some(f => h.hora_inicio.startsWith(f.hora_inicio));
+      return h.disponible || !coincideConFallback;
+    });
+
+    if (tieneHorariosPersonalizados) {
+      // Si hay personalizados, mostramos únicamente los disponibles de la base de datos
+      return dbHorariosCentro.filter(h => h.disponible);
+    }
+
+    // Si no hay personalizados (solo hay registros de fallback ocupados, o la BD está vacía),
+    // mostramos los fallback que no estén ocupados en la base de datos
+    const listadoAuto = fallbackSlots.map((slot, index) => {
+      // Buscar si este slot específico ya fue reservado en la base de datos
+      const ocupadoEnBD = dbHorariosCentro.some(h => 
+        h.fecha === hoyStr && 
+        h.hora_inicio.startsWith(slot.hora_inicio) && 
+        !h.disponible
+      );
+
+      return {
+        id_horario: `h-auto-${index + 1}-${selectedCentroId}`,
+        id_centro: selectedCentroId,
+        fecha: hoyStr,
+        hora_inicio: slot.hora_inicio,
+        hora_fin: slot.hora_fin,
+        disponible: !ocupadoEnBD
+      };
+    });
+
+    // Retornamos solo los que no están ocupados
+    return listadoAuto.filter(h => h.disponible);
   };
 
   const horariosDisponibles = obtenerHorarios();
