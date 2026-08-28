@@ -1279,7 +1279,7 @@ function App() {
         diagnostico: atencionDiagnostico,
         observaciones: atencionObservaciones,
         resultado: atencionResultado
-      }]);
+      }], { onConflict: 'id_turno' });
 
       if (errorAtencion) {
         triggerAlert('Error', `Error al registrar atención: ${errorAtencion.message}`, 'error');
