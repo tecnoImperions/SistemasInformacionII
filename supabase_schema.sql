@@ -177,10 +177,26 @@ create or replace trigger on_auth_user_created
 
 
 -- =====================================================================
+-- FUNCIÓN AUXILIAR DE ACCESO RÁPIDO PARA VALIDAR ROLES EN RLS
+-- =====================================================================
+-- Obtiene el rol real del usuario desde la tabla pública 'usuarios'
+-- usando 'security definer' para evitar recursión infinita en PostgreSQL.
+create or replace function public.get_user_role()
+returns text as $$
+declare
+  user_rol text;
+begin
+  select rol::text into user_rol
+  from public.usuarios 
+  where id_usuario = auth.uid();
+  return coalesce(user_rol, '');
+end;
+$$ language plpgsql security definer;
+
+
+-- =====================================================================
 -- POLÍTICAS DE ROW LEVEL SECURITY (RLS) - SIN RECURSIÓN Y COMPATIBLES
 -- =====================================================================
--- Se utiliza auth.jwt() para verificar roles del usuario en sesión
--- de manera eficiente y evitar la recursión infinita en PostgreSQL.
 
 -- 1. Políticas para CENTROS DE SALUD
 create policy "Centros de salud legibles por todos" 
@@ -188,7 +204,7 @@ create policy "Centros de salud legibles por todos"
 
 create policy "Administradores pueden gestionar centros de salud" 
   on public.centros_salud for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- 2. Políticas para ESPECIALIDADES
@@ -197,7 +213,7 @@ create policy "Especialidades legibles por todos"
 
 create policy "Administradores pueden gestionar especialidades" 
   on public.especialidades for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- 3. Políticas para USUARIOS
@@ -211,12 +227,12 @@ create policy "Permitir inserción de perfil propio"
 
 create policy "Usuarios pueden actualizar sus propios datos" 
   on public.usuarios for update using (
-    auth.uid() = id_usuario or (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')
+    auth.uid() = id_usuario or public.get_user_role() = 'admin'
   );
 
 create policy "Administradores tienen control total sobre usuarios" 
   on public.usuarios for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')
+    public.get_user_role() = 'admin'
   );
 
 -- 4. Políticas para HORARIOS
@@ -225,7 +241,7 @@ create policy "Horarios legibles por todos"
 
 create policy "Personal médico y admin pueden configurar horarios" 
   on public.horarios for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') in ('admin', 'encargado'))
+    public.get_user_role() in ('admin', 'encargado')
   );
 
 -- 5. Políticas para TURNOS (FICHAS)
@@ -233,7 +249,7 @@ create policy "Usuarios ven turnos autorizados"
   on public.turnos for select using (
     auth.uid() = id_paciente or 
     auth.uid() = id_personal_salud or 
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') in ('admin', 'encargado'))
+    public.get_user_role() in ('admin', 'encargado')
   );
 
 create policy "Pacientes pueden solicitar turnos" 
@@ -243,13 +259,13 @@ create policy "Usuarios pueden modificar turnos autorizados"
   on public.turnos for update using (
     auth.uid() = id_paciente or 
     auth.uid() = id_personal_salud or 
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin'::text)
+    public.get_user_role() = 'admin'
   );
 
 -- 6. Políticas para ATENCIONES
 create policy "Atenciones legibles por involucrados" 
   on public.atenciones for select using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin') or
+    public.get_user_role() = 'admin' or
     exists (
       select 1 from public.turnos 
       where turnos.id_turno = atenciones.id_turno and 
@@ -259,7 +275,7 @@ create policy "Atenciones legibles por involucrados"
 
 create policy "Encargados ven y registran atenciones" 
   on public.atenciones for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'encargado')
+    public.get_user_role() = 'encargado'
   );
 
 -- 7. Políticas para NOTIFICACIONES
@@ -269,7 +285,7 @@ create policy "Usuarios ven sus propias notificaciones"
 -- 8. Políticas para REPORTES
 create policy "Solo administradores ven reportes" 
   on public.reportes for all using (
-    (coalesce(auth.jwt() -> 'user_metadata' ->> 'rol', '') = 'admin')
+    public.get_user_role() = 'admin'
   );
 
 
@@ -333,4 +349,66 @@ insert into public.horarios (id_centro, fecha, hora_inicio, hora_fin, disponible
 select id_centro, current_date + interval '1 day', '08:30:00', '09:00:00', true
 from public.centros_salud where nombre = 'Hospital de Niños Mario Ortiz Suarez'
 on conflict do nothing;
+
+
+-- =====================================================================
+-- TRIGGERS DE CONTROL AUTOMÁTICO DE DISPONIBILIDAD DE HORARIOS
+-- =====================================================================
+
+-- 1. Marcar horario como OCUPADO (disponible = false) cuando se inserta un turno
+create or replace function public.handle_turno_created()
+returns trigger as $$
+begin
+  if new.id_horario is not null then
+    update public.horarios
+    set disponible = false
+    where id_horario = new.id_horario;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_turno_created on public.turnos;
+create trigger on_turno_created
+  after insert on public.turnos
+  for each row execute procedure public.handle_turno_created();
+
+
+-- 2. Liberar o re-ocupar horario cuando se actualiza el estado del turno (Cancelado/Ausente)
+create or replace function public.handle_turno_updated()
+returns trigger as $$
+begin
+  if new.estado in ('Cancelado', 'Ausente') and old.estado not in ('Cancelado', 'Ausente') then
+    if new.id_horario is not null then
+      update public.horarios
+      set disponible = true
+      where id_horario = new.id_horario;
+    end if;
+  elsif new.estado = 'Pendiente' and old.estado in ('Cancelado', 'Ausente') then
+    if new.id_horario is not null then
+      update public.horarios
+      set disponible = false
+      where id_horario = new.id_horario;
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_turno_updated on public.turnos;
+create trigger on_turno_updated
+  after update on public.turnos
+  for each row execute procedure public.handle_turno_updated();
+
+
+-- =====================================================================
+-- AJUSTES EN POLÍTICAS RLS DE HORARIOS (FALLBACK FE)
+-- =====================================================================
+-- Habilitar a todos los usuarios autenticados para que puedan actualizar 
+-- la disponibilidad de un horario al reservar/cancelar en el frontend.
+create policy "Usuarios autenticados pueden actualizar disponibilidad de horarios"
+  on public.horarios for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
 
