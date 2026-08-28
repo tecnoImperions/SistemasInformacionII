@@ -951,7 +951,6 @@ function App() {
 
     const isMock = currentUser.id_usuario.startsWith('u-demo') || selectedCentroId.startsWith('c-');
     let idCita = 't-' + Date.now();
-    let insertData = null;
 
     if (!isMock) {
       const isMockHorario = selectedHorarioObj.id_horario.startsWith('h-auto');
@@ -997,8 +996,6 @@ function App() {
       if (insertError) {
         triggerAlert('Error al Reservar', `Error: ${insertError.message}`, 'error');
         return;
-      }
-      insertData = data;
       if (data && data[0]) {
         idCita = data[0].id_turno;
       }
