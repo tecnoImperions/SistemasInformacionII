@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
+import { Html5QrcodeScanner } from 'html5-qrcode'
 import {
   Calendar,
   Stethoscope,
@@ -667,8 +668,18 @@ function App() {
   // Disparador de impresión nativo al seleccionar un target
   useEffect(() => {
     if (printTarget) {
+      // Detectar si está en móvil o envuelto en Capacitor para no disparar impresión automática
+      const esMovil = (window as any).Capacitor !== undefined || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      if (esMovil) {
+        // En móviles mantenemos la ficha digital abierta en pantalla para que el usuario la vea y cierre
+        return;
+      }
+
       const timer = setTimeout(() => {
-        window.print();
+        if (typeof window.print === 'function') {
+          window.print();
+        }
       }, 500);
 
       const handleAfterPrint = () => {
@@ -883,31 +894,29 @@ function App() {
         if (!qrContainer) return;
 
         try {
-          if (typeof (window as any).Html5QrcodeScanner !== "undefined") {
-            html5QrCodeScanner = new (window as any).Html5QrcodeScanner(
-              "qr-reader",
-              { 
-                fps: 10, 
-                qrbox: { width: 220, height: 220 },
-                rememberLastUsedCamera: true,
-                supportedScanTypes: [0, 1] // Permitir cámara y archivos locales para máxima compatibilidad
-              },
-              /* verbose= */ false
-            );
-            
-            const qrCodeSuccessCallback = (decodedText: string) => {
-              html5QrCodeScanner.clear().then(() => {
-                handleProcesarFichaPorTexto(decodedText);
-                setMostrarEscaneoSimulado(false);
-              }).catch((err: any) => {
-                console.error("Error al limpiar escáner:", err);
-                handleProcesarFichaPorTexto(decodedText);
-                setMostrarEscaneoSimulado(false);
-              });
-            };
-            
-            html5QrCodeScanner.render(qrCodeSuccessCallback, () => {});
-          }
+          html5QrCodeScanner = new Html5QrcodeScanner(
+            "qr-reader",
+            { 
+              fps: 10, 
+              qrbox: { width: 220, height: 220 },
+              rememberLastUsedCamera: true,
+              supportedScanTypes: [0, 1] // Permitir cámara y archivos locales para máxima compatibilidad
+            },
+            /* verbose= */ false
+          );
+          
+          const qrCodeSuccessCallback = (decodedText: string) => {
+            html5QrCodeScanner.clear().then(() => {
+              handleProcesarFichaPorTexto(decodedText);
+              setMostrarEscaneoSimulado(false);
+            }).catch((err: any) => {
+              console.error("Error al limpiar escáner:", err);
+              handleProcesarFichaPorTexto(decodedText);
+              setMostrarEscaneoSimulado(false);
+            });
+          };
+          
+          html5QrCodeScanner.render(qrCodeSuccessCallback, () => {});
         } catch (e) {
           console.error("Error al instanciar html5-qrcode scanner:", e);
         }
@@ -1822,6 +1831,97 @@ function App() {
           )}
         </div>
       </header>
+
+      {/* VISTA PREVIA DIGITAL (MODAL EN PANTALLA PARA MÓVILES/DESKTOP) */}
+      {printTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-sm no-print">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-y-auto max-h-[90vh] shadow-2xl p-6 space-y-4 border">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h4 className="font-black text-slate-800 text-base">
+                {printTarget.type === 'ticket' ? 'Ficha Confirmada (Digital)' : 'Reporte de Fichas'}
+              </h4>
+              <button onClick={() => setPrintTarget(null)} className="text-slate-400 hover:text-slate-800 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 border rounded-2xl overflow-x-auto">
+              {printTarget.type === 'ticket' ? (
+                <div className="text-center space-y-3 font-semibold text-xs text-slate-700">
+                  <h3 className="text-blue-600 text-xl font-black">TurnoYa</h3>
+                  <div className="text-2xl font-black text-slate-800 bg-slate-200 py-2 rounded-xl tracking-wider">
+                    #{printTarget.data.id_turno.substring(2, 8).toUpperCase()}
+                  </div>
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${printTarget.data.id_turno}`} 
+                    alt="QR"
+                    className="mx-auto w-32 h-32 border p-1 bg-white rounded-xl"
+                  />
+                  <div className="text-left space-y-1.5 border-t pt-3">
+                    <p><strong>Paciente:</strong> {printTarget.data.nombre_paciente}</p>
+                    <p><strong>C.I. Paciente:</strong> {printTarget.data.ci_paciente}</p>
+                    <p><strong>Teléfono:</strong> {printTarget.data.telefono_paciente || 'No registrado'}</p>
+                    <p><strong>Hospital:</strong> {printTarget.data.nombre_centro}</p>
+                    <p><strong>Especialidad:</strong> {printTarget.data.especialidad_personal_salud}</p>
+                    <p><strong>Consultorio:</strong> <span className="text-blue-700 font-bold">{obtenerConsultorio(printTarget.data.especialidad_personal_salud)}</span></p>
+                    <p><strong>Fecha y Hora:</strong> {printTarget.data.fecha} - {printTarget.data.hora}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 text-xs font-semibold text-slate-700">
+                  <h3 className="text-indigo-600 text-lg font-black">Reporte Estadístico de Fichas</h3>
+                  <div className="space-y-1 text-[11px] text-slate-500">
+                    <p><strong>Hospital:</strong> {printTarget.data.hospital}</p>
+                    <p><strong>Periodo:</strong> {printTarget.data.rango}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-[10px]">
+                    <div className="bg-slate-100 p-2 rounded-lg">Total Fichas: {printTarget.data.turnos.length}</div>
+                    <div className="bg-emerald-50 text-emerald-700 p-2 rounded-lg">Atendidos: {printTarget.data.turnos.filter(t => t.estado === 'Atendido').length}</div>
+                  </div>
+                  <table className="w-full text-left text-[10px] border-collapse border border-slate-200">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="border p-2">Código</th>
+                        <th className="border p-2">Paciente</th>
+                        <th className="border p-2">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printTarget.data.turnos.slice(0, 10).map(t => (
+                        <tr key={t.id_turno}>
+                          <td className="border p-2 font-mono">{t.id_turno.substring(2, 8).toUpperCase()}</td>
+                          <td className="border p-2">{t.nombre_paciente}</td>
+                          <td className="border p-2 font-bold">{t.estado}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {printTarget.data.turnos.length > 10 && (
+                    <p className="text-[10px] text-slate-400 italic text-center">Y {printTarget.data.turnos.length - 10} fichas más en la hoja de impresión.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setPrintTarget(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold transition text-xs cursor-pointer shadow-xs"
+              >
+                Imprimir / PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* SECCIÓN OCULTA EN PANTALLA, ACTIVA EN IMPRESIÓN (PDF / FICHAS / REPORTES) */}
         <div id="print-section">
