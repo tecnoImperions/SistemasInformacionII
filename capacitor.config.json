@@ -1,0 +1,8 @@
+{
+  "appId": "com.upds.turnoya",
+  "appName": "TurnoYa",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

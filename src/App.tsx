@@ -74,6 +74,7 @@ interface Usuario {
   matricula_profesional?: string;
   id_especialidad?: string;
   nivel_acceso?: string;
+  id_centro?: string;
 }
 
 interface Horario {
@@ -452,6 +453,14 @@ function App() {
   const [atencionObservaciones, setAtencionObservaciones] = useState<string>('');
   const [atencionResultado, setAtencionResultado] = useState<string>('');
 
+  // --- GESTIÓN DE USUARIOS (ADMIN) ---
+  const [listaUsuarios, setListaUsuarios] = useState<Usuario[]>([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState<boolean>(false);
+  const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null);
+  const [busquedaUsuario, setBusquedaUsuario] = useState<string>('');
+  const [filtroRolUsuario, setFiltroRolUsuario] = useState<string>('todos');
+  const [filtroHospitalUsuario, setFiltroHospitalUsuario] = useState<string>('todos');
+
   // Sincronización hash url
   useEffect(() => {
     const syncHash = () => {
@@ -541,6 +550,8 @@ function App() {
       ];
       if (currentUser.rol === 'paciente') {
         setTurnos(mockTurnos.filter(t => t.id_paciente === currentUser.id_usuario));
+      } else if (currentUser.rol === 'encargado') {
+        setTurnos(mockTurnos.filter(t => !currentUser.id_centro || t.id_centro === currentUser.id_centro));
       } else {
         setTurnos(mockTurnos);
       }
@@ -578,10 +589,13 @@ function App() {
         setTurnos(mapped);
       }
     } else {
-      const { data: dbTurnos } = await supabase
-        .from('turnos')
-        .select('*')
-        .order('fecha_solicitud', { ascending: false });
+      let query = supabase.from('turnos').select('*');
+      
+      if (currentUser.rol === 'encargado' && currentUser.id_centro) {
+        query = query.eq('id_centro', currentUser.id_centro);
+      }
+      
+      const { data: dbTurnos } = await query.order('fecha_solicitud', { ascending: false });
 
       if (dbTurnos) {
         const { data: dbUsers } = await supabase.from('usuarios').select('*');
@@ -614,6 +628,12 @@ function App() {
   useEffect(() => {
     fetchTurnosReales();
   }, [currentUser, centros]);
+
+  useEffect(() => {
+    if (currentUser?.rol === 'admin' && currentRole === 'admin') {
+      fetchUsuarios();
+    }
+  }, [currentUser, currentRole]);
 
   // Cargar horarios reales de Supabase cuando se selecciona un hospital
   useEffect(() => {
@@ -871,9 +891,9 @@ function App() {
   // --- ACCESOS RÁPIDOS DE PRUEBA (DESDE DEMO BAR) ---
   const handleBypass = (role: 'paciente' | 'encargado' | 'admin') => {
     const demoUsers: Record<string, Usuario> = {
-      paciente: { id_usuario: 'u-demo-pac', ci: '7766554', nombre: 'Paciente de Prueba', apellido: 'Revollo', correo: 'paciente@upds.com', telefono: '76543210', rol: 'paciente' },
-      encargado: { id_usuario: 'u-demo-enc', ci: '5678901', nombre: 'Encargada de Turno', apellido: 'Gutiérrez', correo: 'suzanne@upds.com', telefono: '78011223', rol: 'encargado', matricula_profesional: 'MP-98442' },
-      admin: { id_usuario: 'u-demo-adm', ci: '1111111', nombre: 'Administrador de Turno', apellido: 'Evaluador', correo: 'admin@upds.com', telefono: '71122334', rol: 'admin' }
+      paciente: { id_usuario: 'u-demo-pac', ci: '7766554-SC', nombre: 'Paciente de Prueba', apellido: 'Revollo', correo: 'paciente@upds.com', telefono: '76543210', rol: 'paciente', id_centro: 'c-1' },
+      encargado: { id_usuario: 'u-demo-enc', ci: '5678901-SC', nombre: 'Encargada de Turno', apellido: 'Gutiérrez', correo: 'suzanne@upds.com', telefono: '78011223', rol: 'encargado', matricula_profesional: 'MP-98442', id_especialidad: 'e-1', id_centro: 'c-1' },
+      admin: { id_usuario: 'u-demo-adm', ci: '1111111-SC', nombre: 'Administrador de Turno', apellido: 'Evaluador', correo: 'admin@upds.com', telefono: '71122334', rol: 'admin', id_centro: '' }
     };
     const selected = demoUsers[role];
     setCurrentUser(selected);
@@ -1408,6 +1428,127 @@ function App() {
       setNuevoCentroLat('50');
       setNuevoCentroLong('50');
       setNuevoCentroEspecialidades(['e-1']);
+    }
+  };
+
+  // --- GESTIÓN DE USUARIOS (ADMIN) - ACCIONES REALES Y DEMO ---
+  const fetchUsuarios = async () => {
+    if (!currentUser) return;
+    
+    const isMock = currentUser.id_usuario.startsWith('u-demo');
+    if (isMock) {
+      // Cargar usuarios locales en modo demo con C.I. boliviano y hospitales
+      const mockUsers: Usuario[] = [
+        {
+          id_usuario: 'u-demo-pac',
+          ci: '7766554-SC',
+          nombre: 'Juan Paciente',
+          apellido: 'Perez',
+          correo: 'juan.paciente@example.com',
+          telefono: '76543210',
+          rol: 'paciente',
+          id_centro: 'c-1'
+        },
+        {
+          id_usuario: 'u-demo-enc',
+          ci: '8877665-LP',
+          nombre: 'Dra. Suzanne',
+          apellido: 'Gutiérrez',
+          correo: 'suzanne.encargada@example.com',
+          telefono: '78901234',
+          rol: 'encargado',
+          matricula_profesional: 'MP-12345-SC',
+          id_especialidad: 'e-1',
+          id_centro: 'c-1'
+        },
+        {
+          id_usuario: 'u-demo-adm',
+          ci: '9988776-SC',
+          nombre: 'Admin Principal',
+          apellido: 'Sistemas',
+          correo: 'admin.medic@example.com',
+          telefono: '71234567',
+          rol: 'admin',
+          nivel_acceso: 'Total',
+          id_centro: ''
+        }
+      ];
+      setListaUsuarios(mockUsers);
+      return;
+    }
+
+    setLoadingUsuarios(true);
+    try {
+      const { data: dbUsers, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .order('nombre', { ascending: true });
+      
+      if (error) throw error;
+      
+      if (dbUsers) {
+        setListaUsuarios(dbUsers.map(u => ({
+          id_usuario: u.id_usuario,
+          ci: u.ci || '',
+          nombre: u.nombre || '',
+          apellido: u.apellido || '',
+          correo: u.correo || '',
+          telefono: u.telefono || '',
+          rol: u.rol || 'paciente',
+          matricula_profesional: u.matricula_profesional || '',
+          id_especialidad: u.id_especialidad || '',
+          nivel_acceso: u.nivel_acceso || '',
+          id_centro: u.id_centro || ''
+        })));
+      }
+    } catch (err: any) {
+      console.error("Error al cargar usuarios:", err);
+      triggerAlert("Error", "No se pudieron cargar los usuarios: " + err.message, "error");
+    } finally {
+      setLoadingUsuarios(false);
+    }
+  };
+
+  const handleGuardarUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usuarioEditando) return;
+
+    const isMock = currentUser?.id_usuario.startsWith('u-demo') || false;
+
+    if (isMock) {
+      setListaUsuarios(listaUsuarios.map(u => u.id_usuario === usuarioEditando.id_usuario ? { ...usuarioEditando } : u));
+      triggerAlert("Éxito (Demo)", "Usuario actualizado correctamente de forma local", "success");
+      setUsuarioEditando(null);
+      return;
+    }
+
+    try {
+      const payload: any = {
+        ci: usuarioEditando.ci,
+        nombre: usuarioEditando.nombre,
+        apellido: usuarioEditando.apellido,
+        telefono: usuarioEditando.telefono,
+        rol: usuarioEditando.rol,
+        matricula_profesional: usuarioEditando.rol === 'encargado' ? usuarioEditando.matricula_profesional : null,
+        id_especialidad: usuarioEditando.rol === 'encargado' ? (usuarioEditando.id_especialidad || null) : null,
+        nivel_acceso: usuarioEditando.rol === 'admin' ? (usuarioEditando.nivel_acceso || null) : null,
+        id_centro: usuarioEditando.id_centro || null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('usuarios')
+        .update(payload)
+        .eq('id_usuario', usuarioEditando.id_usuario);
+
+      if (error) throw error;
+
+      triggerAlert("Éxito", "Usuario actualizado correctamente en Supabase", "success");
+      setUsuarioEditando(null);
+      fetchUsuarios();
+    } catch (err: any) {
+      console.error("Error al actualizar usuario:", err);
+      triggerAlert("Error", "No se pudo actualizar el usuario: " + err.message, "error");
     }
   };
 
@@ -3238,6 +3379,152 @@ function App() {
                   </div>
                 </div>
 
+                {/* GESTIÓN DE USUARIOS */}
+                <div className="bg-white border-2 border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b pb-2 gap-2">
+                    <h4 className="font-extrabold text-slate-800 text-base flex items-center gap-1.5">
+                      <Stethoscope className="w-5 h-5 text-purple-600" /> Gestión de Usuarios y Roles (TurnoYa)
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={fetchUsuarios}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-1.5 rounded-xl font-black text-xs transition flex items-center gap-1.5 cursor-pointer border"
+                    >
+                      Actualizar Lista
+                    </button>
+                  </div>
+
+                  {/* Filtros de usuarios */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={busquedaUsuario}
+                        onChange={(e) => setBusquedaUsuario(e.target.value)}
+                        placeholder="Buscar por Nombre, C.I. o Correo..."
+                        className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                    </div>
+
+                    <div>
+                      <select
+                        value={filtroRolUsuario}
+                        onChange={(e) => setFiltroRolUsuario(e.target.value)}
+                        className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                      >
+                        <option value="todos">Todos los Roles</option>
+                        <option value="paciente">Pacientes</option>
+                        <option value="encargado">Encargados / Médicos</option>
+                        <option value="admin">Administradores</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <select
+                        value={filtroHospitalUsuario}
+                        onChange={(e) => setFiltroHospitalUsuario(e.target.value)}
+                        className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                      >
+                        <option value="todos">Todos los Hospitales</option>
+                        {centros.map(c => (
+                          <option key={c.id_centro} value={c.id_centro}>
+                            {c.nombre}
+                          </option>
+                        ))}
+                        <option value="ninguno">Sin Hospital Asignado</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Tabla/Lista de usuarios */}
+                  {loadingUsuarios ? (
+                    <div className="text-center py-6 font-bold text-xs text-slate-500">Cargando usuarios...</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                      <table className="w-full text-left text-xs font-semibold">
+                        <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase border-b font-extrabold">
+                          <tr>
+                            <th className="px-4 py-3">Usuario / C.I.</th>
+                            <th className="px-4 py-3">Contacto</th>
+                            <th className="px-4 py-3">Rol</th>
+                            <th className="px-4 py-3">Detalles Adicionales</th>
+                            <th className="px-4 py-3 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {listaUsuarios
+                            .filter(u => {
+                              const matchText = 
+                                u.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                                u.apellido.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                                u.correo.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                                u.ci.includes(busquedaUsuario);
+                              
+                              const matchRol = filtroRolUsuario === 'todos' || u.rol === filtroRolUsuario;
+                              
+                              const matchHospital = 
+                                filtroHospitalUsuario === 'todos' || 
+                                (filtroHospitalUsuario === 'ninguno' && !u.id_centro) || 
+                                u.id_centro === filtroHospitalUsuario;
+
+                              return matchText && matchRol && matchHospital;
+                            })
+                            .sort((a, b) => {
+                              const roleWeight = { admin: 1, encargado: 2, paciente: 3 };
+                              const wA = roleWeight[a.rol] || 4;
+                              const wB = roleWeight[b.rol] || 4;
+                              if (wA !== wB) return wA - wB;
+                              return (a.nombre + ' ' + a.apellido).localeCompare(b.nombre + ' ' + b.apellido);
+                            })
+                            .map(u => (
+                              <tr key={u.id_usuario} className="hover:bg-slate-50/50">
+                                <td className="px-4 py-3.5">
+                                  <p className="font-bold text-slate-800">{u.nombre} {u.apellido}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono">C.I.: {u.ci}</p>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <p className="text-slate-600">{u.correo}</p>
+                                  <p className="text-[10px] text-slate-400">{u.telefono || 'Sin teléfono'}</p>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                    u.rol === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                    u.rol === 'encargado' ? 'bg-indigo-100 text-indigo-700' :
+                                    'bg-emerald-100 text-emerald-700'
+                                  }`}>
+                                    {u.rol}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5 text-[11px] text-slate-500">
+                                  <p><strong>Hospital:</strong> {centros.find(c => c.id_centro === u.id_centro)?.nombre || 'No asignado'}</p>
+                                  {u.rol === 'encargado' && (
+                                    <>
+                                      <p><strong>Mát.:</strong> {u.matricula_profesional || 'N/A'}</p>
+                                      <p><strong>Esp.:</strong> {especialidades.find(e => e.id_especialidad === u.id_especialidad)?.nombre || 'General'}</p>
+                                    </>
+                                  )}
+                                  {u.rol === 'admin' && (
+                                    <p><strong>Acceso:</strong> {u.nivel_acceso || 'Total'}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => setUsuarioEditando({ ...u })}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white font-black text-[10px] px-3 py-1.5 rounded-lg cursor-pointer transition uppercase"
+                                  >
+                                    Editar / Rol
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
 
@@ -3313,6 +3600,197 @@ function App() {
                 Sí, confirmar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR USUARIO Y ROL */}
+      {usuarioEditando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn text-sm">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4 border">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h4 className="font-black text-slate-800 text-base flex items-center gap-1.5">
+                <Stethoscope className="w-5 h-5 text-purple-600" /> Editar Usuario y Cambiar Rol
+              </h4>
+              <button onClick={() => setUsuarioEditando(null)} className="text-slate-400 hover:text-slate-800 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarUsuario} className="space-y-4 font-semibold text-xs text-slate-700">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Nombre</label>
+                  <input
+                    type="text"
+                    required
+                    value={usuarioEditando.nombre}
+                    onChange={(e) => setUsuarioEditando({ ...usuarioEditando, nombre: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Apellido</label>
+                  <input
+                    type="text"
+                    required
+                    value={usuarioEditando.apellido}
+                    onChange={(e) => setUsuarioEditando({ ...usuarioEditando, apellido: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">C.I. (Número)</label>
+                  <input
+                    type="text"
+                    required
+                    value={usuarioEditando.ci.split('-')[0] || ''}
+                    onChange={(e) => {
+                      const numberPart = e.target.value.replace(/[^0-9]/g, '');
+                      const extensionPart = usuarioEditando.ci.split('-')[1] || '';
+                      const finalCI = extensionPart ? `${numberPart}-${extensionPart}` : numberPart;
+                      setUsuarioEditando({ ...usuarioEditando, ci: finalCI });
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Expedido</label>
+                  <select
+                    value={usuarioEditando.ci.split('-')[1] || ''}
+                    onChange={(e) => {
+                      const numberPart = usuarioEditando.ci.split('-')[0] || '';
+                      const extensionPart = e.target.value;
+                      const finalCI = extensionPart ? `${numberPart}-${extensionPart}` : numberPart;
+                      setUsuarioEditando({ ...usuarioEditando, ci: finalCI });
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold cursor-pointer"
+                  >
+                    <option value="">Ninguno</option>
+                    <option value="SC">SC (Santa Cruz)</option>
+                    <option value="LP">LP (La Paz)</option>
+                    <option value="CB">CB (Cochabamba)</option>
+                    <option value="OR">OR (Oruro)</option>
+                    <option value="PT">PT (Potosí)</option>
+                    <option value="TJ">TJ (Tarija)</option>
+                    <option value="CH">CH (Chuquisaca)</option>
+                    <option value="BE">BE (Beni)</option>
+                    <option value="PD">PD (Pando)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Teléfono</label>
+                  <input
+                    type="text"
+                    value={usuarioEditando.telefono || ''}
+                    onChange={(e) => setUsuarioEditando({ ...usuarioEditando, telefono: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Rol del Usuario</label>
+                  <select
+                    value={usuarioEditando.rol}
+                    onChange={(e) => setUsuarioEditando({ 
+                      ...usuarioEditando, 
+                      rol: e.target.value as 'paciente' | 'encargado' | 'admin'
+                    })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold cursor-pointer"
+                  >
+                    <option value="paciente">Paciente</option>
+                    <option value="encargado">Encargado (Médico / Ventanilla)</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase">Centro de Salud / Hospital Asignado</label>
+                <select
+                  value={usuarioEditando.id_centro || ''}
+                  onChange={(e) => setUsuarioEditando({ ...usuarioEditando, id_centro: e.target.value || undefined })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold cursor-pointer"
+                >
+                  <option value="">No asignado / Ninguno</option>
+                  {centros.map(c => (
+                    <option key={c.id_centro} value={c.id_centro}>
+                      {c.nombre} (Nivel {c.nivel_atencion})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {usuarioEditando.rol === 'encargado' && (
+                <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-3">
+                  <p className="text-[10px] text-indigo-700 font-black uppercase">Atributos del Encargado (Médico / Ventanilla)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase">Matrícula Profesional</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: MP-9988-SC"
+                        value={usuarioEditando.matricula_profesional || ''}
+                        onChange={(e) => setUsuarioEditando({ ...usuarioEditando, matricula_profesional: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase">Especialidad Asignada</label>
+                      <select
+                        value={usuarioEditando.id_especialidad || ''}
+                        onChange={(e) => setUsuarioEditando({ ...usuarioEditando, id_especialidad: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold cursor-pointer"
+                      >
+                        <option value="">Medicina General (Por defecto)</option>
+                        {especialidades.map(esp => (
+                          <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                            {esp.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {usuarioEditando.rol === 'admin' && (
+                <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-2">
+                  <p className="text-[10px] text-purple-700 font-black uppercase">Atributos del Administrador</p>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase">Nivel de Acceso</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Total, Supervisor, Consultor"
+                      value={usuarioEditando.nivel_acceso || ''}
+                      onChange={(e) => setUsuarioEditando({ ...usuarioEditando, nivel_acceso: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setUsuarioEditando(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold transition text-xs cursor-pointer shadow-xs"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

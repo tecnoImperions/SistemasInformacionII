@@ -59,6 +59,9 @@ create table public.usuarios (
   -- Atributos de Administrador
   nivel_acceso text,
 
+  -- Hospital/Centro Asignado
+  id_centro uuid references public.centros_salud(id_centro) on delete set null,
+
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -153,7 +156,8 @@ begin
     rol, 
     matricula_profesional, 
     id_especialidad, 
-    nivel_acceso
+    nivel_acceso,
+    id_centro
   )
   values (
     new.id,
@@ -165,7 +169,8 @@ begin
     coalesce((new.raw_user_meta_data->>'rol')::public.rol_usuario, 'paciente'::public.rol_usuario),
     new.raw_user_meta_data->>'matricula_profesional',
     (new.raw_user_meta_data->>'id_especialidad')::uuid,
-    new.raw_user_meta_data->>'nivel_acceso'
+    new.raw_user_meta_data->>'nivel_acceso',
+    (new.raw_user_meta_data->>'id_centro')::uuid
   );
   return new;
 end;
