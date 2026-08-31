@@ -84,6 +84,7 @@ interface Horario {
   hora_inicio: string;
   hora_fin: string;
   disponible: boolean;
+  id_especialidad?: string;
 }
 
 interface Turno {
@@ -392,7 +393,7 @@ function App() {
 
   // --- DATOS PRINCIPALES ---
   const [centros, setCentros] = useState<CentroSalud[]>(centrosSantaCruz);
-  const [especialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>(especialidadesSantaCruz);
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
 
@@ -433,9 +434,10 @@ function App() {
 
   // --- ADMINISTRADOR (ADMIN) - HORARIOS ---
   const [nuevoHorarioCentro, setNuevoHorarioCentro] = useState<string>('c-1');
-  const [nuevoHorarioFecha, setNuevoHorarioFecha] = useState<string>('2026-08-22');
+  const [nuevoHorarioFecha, setNuevoHorarioFecha] = useState<string>(new Date().toISOString().split('T')[0]);
   const [nuevoHorarioInicio, setNuevoHorarioInicio] = useState<string>('06:00');
   const [nuevoHorarioFin, setNuevoHorarioFin] = useState<string>('06:30');
+  const [nuevoHorarioEspecialidad, setNuevoHorarioEspecialidad] = useState<string>('e-1');
 
   // --- ADMINISTRADOR (ADMIN) - HOSPITALES ---
   const [nuevoCentroNombre, setNuevoCentroNombre] = useState('');
@@ -635,14 +637,18 @@ function App() {
     }
   }, [currentUser, currentRole]);
 
-  // Cargar horarios reales de Supabase cuando se selecciona un hospital
+  // Cargar horarios reales de Supabase cuando se selecciona un hospital y especialidad
   useEffect(() => {
     const fetchHorarios = async () => {
       if (!selectedCentroId || selectedCentroId.startsWith('c-')) return;
-      const { data: dbHorarios } = await supabase
-        .from('horarios')
-        .select('*')
-        .eq('id_centro', selectedCentroId);
+      
+      let query = supabase.from('horarios').select('*').eq('id_centro', selectedCentroId);
+      
+      if (selectedEspecialidadId) {
+        query = query.eq('id_especialidad', selectedEspecialidadId);
+      }
+
+      const { data: dbHorarios } = await query;
       if (dbHorarios) {
         setHorarios(dbHorarios.map(h => ({
           id_horario: h.id_horario,
@@ -650,12 +656,13 @@ function App() {
           fecha: h.fecha,
           hora_inicio: h.hora_inicio.substring(0, 5),
           hora_fin: h.hora_fin.substring(0, 5),
+          id_especialidad: h.id_especialidad || '',
           disponible: h.disponible
         })));
       }
     };
     fetchHorarios();
-  }, [selectedCentroId]);
+  }, [selectedCentroId, selectedEspecialidadId]);
 
   // Disparador de impresión nativo al seleccionar un target
   useEffect(() => {
@@ -808,10 +815,41 @@ function App() {
     });
 
     const fetchDB = async () => {
+      // 1. Cargar especialidades primero para obtener sus UUIDs reales de Supabase
+      const { data: dbEspecialidades } = await supabase.from('especialidades').select('*');
+      let mappedEspecialidadesList: Especialidad[] = [];
+      if (dbEspecialidades && dbEspecialidades.length > 0) {
+        mappedEspecialidadesList = dbEspecialidades.map(dbe => {
+          const local = especialidadesSantaCruz.find(le => le.nombre.toLowerCase().includes(dbe.nombre.toLowerCase()));
+          return {
+            id_especialidad: dbe.id_especialidad,
+            nombre: dbe.nombre,
+            descripcion: dbe.description || local?.descripcion || '',
+            iconName: local?.iconName || 'Stethoscope'
+          };
+        });
+        setEspecialidades(mappedEspecialidadesList);
+        if (mappedEspecialidadesList[0]?.id_especialidad) {
+          setNuevoHorarioEspecialidad(mappedEspecialidadesList[0].id_especialidad);
+        }
+      }
+
+      // 2. Cargar centros de salud e integrar especialidades mapeadas con UUIDs
       const { data: dbCentros } = await supabase.from('centros_salud').select('*');
       if (dbCentros && dbCentros.length > 0) {
         const merged = dbCentros.map(dbc => {
           const local = centrosSantaCruz.find(lc => lc.nombre.toLowerCase().includes(dbc.nombre.toLowerCase()));
+          
+          const localSpecialtiesRaw = dbc.especialidades || local?.especialidades || ['e-1'];
+          const mappedIds = localSpecialtiesRaw.map((mockId: string) => {
+            const mockEsp = especialidadesSantaCruz.find(me => me.id_especialidad === mockId);
+            if (mockEsp) {
+              const realEsp = mappedEspecialidadesList.find(re => re.nombre.toLowerCase().includes(mockEsp.nombre.toLowerCase()));
+              if (realEsp) return realEsp.id_especialidad;
+            }
+            return mockId;
+          });
+
           return {
             id_centro: dbc.id_centro,
             nombre: dbc.nombre,
@@ -824,7 +862,7 @@ function App() {
             imagen_url: dbc.imagen_url || local?.imagen_url || 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&q=80&w=400',
             latitud: dbc.latitud !== undefined && dbc.latitud !== null ? dbc.latitud : (local?.latitud || 50),
             longitud: dbc.longitud !== undefined && dbc.longitud !== null ? dbc.longitud : (local?.longitud || 50),
-            especialidades: dbc.especialidades || local?.especialidades || ['e-1']
+            especialidades: mappedIds
           };
         });
         setCentros(merged);
@@ -1197,21 +1235,31 @@ function App() {
     e.preventDefault();
     if (!nuevoHorarioCentro) return;
 
-    const isMock = currentUser?.id_usuario.startsWith('u-demo') || nuevoHorarioCentro.startsWith('c-');
+    const isMock = currentUser?.id_usuario.startsWith('u-demo') || false;
+
+    // Obtener lista de hospitales a registrar
+    const centrosAProcesar = nuevoHorarioCentro === 'todos'
+      ? centros
+      : centros.filter(c => c.id_centro === nuevoHorarioCentro);
+
+    if (centrosAProcesar.length === 0) return;
 
     if (!isMock) {
-      const { error } = await supabase.from('horarios').insert([{
-        id_centro: nuevoHorarioCentro,
+      const rowsToInsert = centrosAProcesar.map(c => ({
+        id_centro: c.id_centro,
         fecha: nuevoHorarioFecha,
         hora_inicio: nuevoHorarioInicio,
         hora_fin: nuevoHorarioFin,
+        id_especialidad: nuevoHorarioEspecialidad,
         disponible: true
-      }]);
+      }));
+
+      const { error } = await supabase.from('horarios').insert(rowsToInsert);
 
       if (error) {
-        triggerAlert('Error', `Error al registrar horario: ${error.message}`, 'error');
+        triggerAlert('Error', `Error al registrar horarios: ${error.message}`, 'error');
       } else {
-        triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito en la base de datos de Supabase.', 'success');
+        triggerAlert('Horarios Registrados', `Horario de atención registrado con éxito para ${centrosAProcesar.length} hospital(es) en Supabase.`, 'success');
         // Recargar horarios
         const { data: dbHorarios } = await supabase.from('horarios').select('*');
         if (dbHorarios) {
@@ -1221,22 +1269,24 @@ function App() {
             fecha: h.fecha,
             hora_inicio: h.hora_inicio.substring(0, 5),
             hora_fin: h.hora_fin.substring(0, 5),
+            id_especialidad: h.id_especialidad || '',
             disponible: h.disponible
           })));
         }
       }
     } else {
       // Registrar localmente para demo
-      const nuevoHorarioLocal: Horario = {
-        id_horario: 'h-' + Date.now(),
-        id_centro: nuevoHorarioCentro,
+      const nuevosHorariosLocales = centrosAProcesar.map((c, index) => ({
+        id_horario: 'h-' + Date.now() + '-' + index,
+        id_centro: c.id_centro,
         fecha: nuevoHorarioFecha,
         hora_inicio: nuevoHorarioInicio,
         hora_fin: nuevoHorarioFin,
+        id_especialidad: nuevoHorarioEspecialidad,
         disponible: true
-      };
-      setHorarios([...horarios, nuevoHorarioLocal]);
-      triggerAlert('Horario Registrado', 'Horario de atención registrado con éxito (Modo Demo).', 'success');
+      }));
+      setHorarios([...horarios, ...nuevosHorariosLocales]);
+      triggerAlert('Horarios Registrados', `Horario de atención registrado con éxito para ${centrosAProcesar.length} hospital(es) (Modo Demo).`, 'success');
     }
   };
 
@@ -1623,7 +1673,11 @@ function App() {
   
   const obtenerHorarios = () => {
     const hoyStr = new Date().toISOString().split('T')[0];
-    const dbHorariosCentro = horarios.filter(h => h.id_centro === selectedCentroId);
+    const dbHorariosCentro = horarios.filter(h => 
+      h.id_centro === selectedCentroId && 
+      h.fecha >= hoyStr && 
+      (!selectedEspecialidadId || !h.id_especialidad || h.id_especialidad === selectedEspecialidadId)
+    );
 
     // Definir los 5 horarios fallback por defecto
     const fallbackSlots = [
@@ -3076,11 +3130,27 @@ function App() {
                       <select
                         value={nuevoHorarioCentro}
                         onChange={(e) => setNuevoHorarioCentro(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none cursor-pointer"
                       >
+                        <option value="todos">Todos los Hospitales</option>
                         {centros.map(c => (
                           <option key={c.id_centro} value={c.id_centro}>
                             {c.nombre} (Nivel {c.nivel_atencion})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 font-bold">Seleccione la Especialidad</label>
+                      <select
+                        value={nuevoHorarioEspecialidad}
+                        onChange={(e) => setNuevoHorarioEspecialidad(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-purple-500 outline-none cursor-pointer"
+                      >
+                        {especialidades.map(esp => (
+                          <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                            {esp.nombre}
                           </option>
                         ))}
                       </select>

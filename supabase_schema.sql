@@ -73,14 +73,15 @@ alter table public.usuarios enable row level security;
 create table public.horarios (
   id_horario uuid default gen_random_uuid() primary key,
   id_centro uuid references public.centros_salud(id_centro) on delete cascade not null,
+  id_especialidad uuid references public.especialidades(id_especialidad) on delete cascade,
   fecha date not null,
   hora_inicio time not null,
   hora_fin time not null,
   disponible boolean default true not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   
-  -- Asegurar que no haya duplicación del mismo bloque en el hospital
-  unique (id_centro, fecha, hora_inicio, hora_fin)
+  -- Asegurar que no haya duplicación del mismo bloque en el hospital para la misma especialidad
+  unique (id_centro, id_especialidad, fecha, hora_inicio, hora_fin)
 );
 
 -- Habilitar RLS en horarios
